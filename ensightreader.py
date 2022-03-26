@@ -479,6 +479,30 @@ class EnsightVariableFile:
                                                                         # part_element_offsets is None)
     geometry_file: EnsightGeometryFile
 
+    def read_node_data(self, fp: io.BufferedIOBase, part_id: int) -> Optional[np.ndarray]:
+        part = self.geometry_file.parts[part_id]
+
+        if not self.variable_location == VariableLocation.PER_NODE:
+            raise ValueError("Variable is not per node")
+
+        offset = self.part_offsets.get(part_id)
+        if offset is None:
+            return None
+
+        fp.seek(offset)
+        assert read_line(fp).startswith("part")
+        assert read_int(fp) == part_id
+        assert read_line(fp).startswith("coordinates")
+
+        n = part.number_of_nodes
+        k = VALUES_FOR_VARIABLE_TYPE[self.variable_type]
+        arr = read_floats(fp, n*k)
+        if k > 1:
+            arr = arr.reshape((n, k), order="F")
+        return arr
+
+    # TODO read_element_data()
+
     @classmethod
     def from_file_path(cls, file_path: str, variable_location: VariableLocation, variable_type: VariableType,
                        geofile: EnsightGeometryFile) -> "EnsightVariableFile":
@@ -632,7 +656,7 @@ class EnsightCaseFile:
             self._geometry_file_cache[timestep] = self.geometry_model.get_file(timestep)
         return self._geometry_file_cache[timestep]
 
-    def get_variable(self, name: str, timestep: int = 0):
+    def get_variable(self, name: str, timestep: int = 0) -> EnsightVariableFile:
         cache_key = (name, timestep)
         if cache_key not in self._variable_file_cache:
             variable_fileset = self.variables.get(name)
