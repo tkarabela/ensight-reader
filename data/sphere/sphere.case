@@ -1,0 +1,10 @@
+# Created with Paraview 5.10: Wavelet -> Sphere -> Resample with Dataset
+
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: sphere.0.00000.geo
+
+VARIABLE
+scalar per node: RTData sphere.0.00000_n.RTData
