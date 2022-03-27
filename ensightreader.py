@@ -30,6 +30,17 @@ import os.path as op
 
 
 class EnsightReaderError(Exception):
+    """
+    Error raised when parsing EnSight Gold binary files
+
+    Attributes:
+        file_path (str): path to file where thr error was encountered
+        file_offset (int): approximate seek position of the error (this may be a bit past the place where
+            the error is - it's the seek position when this exception was raised)
+        file_lineno (int): line number of the error (this only applies to errors in ``*.case`` file,
+            as other files are binary)
+
+    """
     def __init__(self, msg: str, fp: Optional[io.BufferedIOBase] = None, lineno: Optional[int] = None):
         self.file_path = getattr(fp, "name", None)
         self.file_offset = fp.tell() if fp else None
@@ -42,6 +53,13 @@ class EnsightReaderError(Exception):
 
 
 class IdHandling(Enum):
+    """
+    Handling of node/element IDs in EnSight Gold geometry file.
+
+    This is defined in geometry file header and describes whether
+    IDs are present in the file or not.
+
+    """
     OFF = "off"
     GIVEN = "given"
     ASSIGN = "assign"
@@ -49,15 +67,30 @@ class IdHandling(Enum):
 
     @property
     def ids_present(self) -> bool:
+        """Return True if IDs are present in geometry file, otherwise False"""
         return self == self.GIVEN or self == self.IGNORE
 
 
 class VariableLocation(Enum):
+    """
+    Location of variable in EnSight Gold case
+
+    Whether the variable is defined for cells or nodes.
+    """
     PER_ELEMENT = "element"
     PER_NODE = "node"
 
 
 class VariableType(Enum):
+    """
+    Type of variable in EnSight Gold case
+
+    .. Note::
+        Complex variables, constants, and "per measured"
+        variables are not supported.
+
+    """
+
     SCALAR = "scalar"
     VECTOR = "vector"
     TENSOR_SYMM = "tensor symm"
@@ -73,6 +106,14 @@ VALUES_FOR_VARIABLE_TYPE = {
 }
 
 class ElementType(Enum):
+    """
+    Element type in EnSight Gold geometry file
+
+    .. Note::
+        Ghost cell variants ``g_*`` are not supported.
+
+    """
+
     POINT = "point"
     BAR2 = "bar2"
     BAR3 = "bar3"
@@ -119,10 +160,22 @@ class ElementType(Enum):
 
     @property
     def dimension(self) -> int:
+        """
+        Return dimension of element
+
+        Returns 3 for volume elements, 2 for surface elements, 1 for line elements
+        and 0 for point elements.
+        """
         return DIMENSION_PER_ELEMENT[self]
 
     @property
     def nodes_per_element(self) -> int:
+        """
+        Return number nodes defining the element
+
+        This only makes sense for elements consisting of constant number of nodes.
+        For NSIDED and NFACED element type, this raises and exception.
+        """
         return NODES_PER_ELEMENT[self]
 
 NODES_PER_ELEMENT = {
@@ -167,6 +220,20 @@ SIZE_INT = SIZE_FLOAT = 4
 
 @dataclass
 class Timeset:
+    """
+    Description of time set in EnSight Gold case
+
+    This means a non-decreasing sequence of times
+    for which geometry and/or variable values are known.
+
+    Attributes:
+        timeset_id: ID of the time set
+        description: label of the time set, or None
+        number_of_steps: number of timesteps
+        filename_numbers: list of numbers for filenames (to be filled in place of ``*`` wildcards)
+        time_values: list of time values (ie. seconds, or something else)
+
+    """
     timeset_id: int
     description: Optional[str]
     number_of_steps: int
@@ -176,13 +243,53 @@ class Timeset:
 
 @dataclass
 class UnstructuredElementBlock:
-    offset: int  # offset to 'element type' line in file (eg. 'tria3')
+    """
+    A block of elements of the same type in a part in EnSight Gold binary geometry file
+
+    To use it:
+
+        >>> from ensightreader import EnsightCaseFile, ElementType
+        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> geofile = case.get_geometry_model()
+        >>> part_names = geofile.get_part_names()
+        >>> part = geofile.get_part_by_name(part_names[0])
+        >>> with open(geofile.file_path, "rb") as fp_geo:
+        ...     for block in part.element_blocks:
+        ...         if block.element_type == ElementType.NFACED:
+        ...             polyhedra_face_counts, face_node_counts, face_connectivity = block.read_connectivity_nfaced(fp_geo)
+        ...         elif block.element_type == ElementType.NSIDED:
+        ...             polygon_node_counts, polygon_connectivity = block.read_connectivity_nsided(fp_geo)
+        ...         else:
+        ...             connectivity = block.read_connectivity(fp_geo)
+
+    Attributes:
+        offset: offset to 'element type' line in file (eg. 'tria3')
+        number_of_elements: number of elements in this block
+        element_type: type of elements in this block
+        element_id_handling: element ID presence
+        part_id: part number
+    """
+    offset: int
     number_of_elements: int
     element_type: ElementType
     element_id_handling: IdHandling
     part_id: int
 
     def read_connectivity(self, fp: io.BufferedIOBase) -> np.ndarray:
+        """
+        Read connectivity (for elements other than NSIDED/NFACED)
+
+        Use this for elements which have constant number of nodes
+        per element (ie. any element type except polygons and polyhedra).
+
+        Args:
+            fp: opened geometry file object in ``"rb"`` mode
+
+        Returns:
+            2D ``(n, k)`` array of int32 with node indices (numbered from 1), where
+            ``n`` is the number of elements and
+            ``k`` is the number of nodes defining each element
+        """
         if self.element_type not in NODES_PER_ELEMENT:
             raise ValueError("Please use other methods for nsided/nfaced")
 
@@ -199,6 +306,19 @@ class UnstructuredElementBlock:
         return arr.reshape((self.number_of_elements, nodes_per_element), order="C")
 
     def read_connectivity_nsided(self, fp: io.BufferedIOBase) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Read connectivity (for NSIDED elements)
+
+        Args:
+            fp: opened geometry file object in ``"rb"`` mode
+
+        Returns:
+            tuple ``(polygon_node_counts, polygon_connectivity)`` where
+            ``polygon_node_counts`` is 1D array of type int32
+            giving number of nodes for each polygon and
+            ``polygon_connectivity`` is 1D array of type int32
+            giving node indices (numbered from 1) for every polygon
+        """
         if self.element_type != ElementType.NSIDED:
             raise ValueError("Please use other methods for not nsided")
 
@@ -214,6 +334,22 @@ class UnstructuredElementBlock:
         return polygon_node_counts, polygon_connectivity
 
     def read_connectivity_nfaced(self, fp: io.BufferedIOBase) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Read connectivity (for NFACED elements)
+
+        Args:
+            fp: opened geometry file object in ``"rb"`` mode
+
+        Returns:
+            tuple ``(polyhedra_face_counts, face_node_counts, face_connectivity)`` where
+            ``polyhedra_face_counts`` is 1D array of type int32
+            giving number of faces for each polygon,
+            ``face_node_counts`` is 1D array of type int32
+            giving number of nodes for each face for each polygon (ordered as
+            1st polygon 1st face, 1st polygon 2nd face, ..., 2nd polygon 1st face, ...),
+            ``face_connectivity`` is 1D array of type int32 giving node indices
+            (numbered from 1)
+        """
         if self.element_type != ElementType.NFACED:
             raise ValueError("Please use other methods for not nfaced")
 
@@ -231,6 +367,7 @@ class UnstructuredElementBlock:
 
     @classmethod
     def from_file(cls, fp: io.BufferedIOBase, element_id_handling: IdHandling, part_id: int):
+        """Used internally by `GeometryPart.from_file()`"""
         offset = fp.tell()
 
         element_type_line = read_line(fp)
@@ -269,15 +406,51 @@ class UnstructuredElementBlock:
 
 @dataclass
 class GeometryPart:
-    offset: int  # offset to 'part' line in file
+    """
+    A part in EnSight Gold geometry file
+
+    To use it:
+
+        >>> from ensightreader import EnsightCaseFile
+        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> geofile = case.get_geometry_model()
+        >>> part_names = geofile.get_part_names()
+        >>> part = geofile.get_part_by_name(part_names[0])
+        >>> print(part.is_volume())
+        >>> print(part.number_of_nodes)
+
+    Each geometry part has its own set of nodes not shared
+    with other parts. Elements are defined in blocks, where
+    each block may have different type (tetrahedra, wedge, etc.)
+    but all elements in the block have the same type.
+
+    Attributes:
+        offset: offset to 'part' line in the geometry file
+        part_id: part number
+        part_name: part name ('description' line)
+        number_of_nodes: number of nodes for this part
+        element_blocks: list of element blocks, in order of definition in the file
+        node_id_handling: node ID presence
+        element_id_handling: element ID presence
+    """
+    offset: int
     part_id: int
-    part_name: str  # 'description' line
+    part_name: str
     number_of_nodes: int
     element_blocks: List[UnstructuredElementBlock]
     node_id_handling: IdHandling
     element_id_handling: IdHandling
 
     def read_nodes(self, fp: io.BufferedIOBase) -> np.ndarray:
+        """
+        Read node coordinates for this part
+
+        Args:
+            fp: opened geometry file object in ``"rb"`` mode
+
+        Returns:
+            2D ``(n, 3)`` array of float32 with node coordinates
+        """
         fp.seek(self.offset)
 
         assert read_line(fp).startswith("part")
@@ -292,20 +465,25 @@ class GeometryPart:
         return arr.reshape((self.number_of_nodes, 3), order="F")
 
     def is_volume(self) -> bool:
+        """Return True if part contains volume elements"""
         return any(block.element_type.dimension == 3 for block in self.element_blocks)
 
     def is_surface(self) -> bool:
+        """Return True if part contains surface elements"""
         return any(block.element_type.dimension == 2 for block in self.element_blocks)
 
     @property
     def number_of_elements(self) -> int:
+        """Return number of elements (of all types)"""
         return sum(block.number_of_elements for block in self.element_blocks)
 
     def get_number_of_elements_of_type(self, element_type: ElementType) -> int:
+        """Return number of elements (of given type)"""
         return sum(block.number_of_elements for block in self.element_blocks if block.element_type == element_type)
 
     @classmethod
     def from_file(cls, fp: io.BufferedIOBase, node_id_handling: IdHandling, element_id_handling: IdHandling):
+        """Used internally by `EnsightGeometryFile.from_file()`"""
         offset = fp.tell()
         fp.seek(0, os.SEEK_END)
         file_len = fp.tell()
@@ -392,6 +570,31 @@ def peek_line(fp: io.BufferedIOBase) -> str:
 
 @dataclass
 class EnsightGeometryFile:
+    """
+    EnSight Gold binary geometry file
+
+    To use it:
+
+        >>> from ensightreader import EnsightCaseFile
+        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> geofile = case.get_geometry_model()
+        >>> part_names = geofile.get_part_names()
+        >>> part = geofile.get_part_by_name(part_names[0])
+
+    This objects contains metadata parsed from EnSight Gold
+    geometry file; it does not hold any node coordinates,
+    connectivity, etc., but after it's been created it can
+    read any such data on demand.
+
+    Attributes:
+        file_path: path to the actual geometry file (no wildcards)
+        description_line1: first line in header
+        description_line2: second line in header
+        node_id_handling: node ID presence
+        element_id_handling: element ID presence
+        extents: optional extents given in header (xmin, xmax, ymin, ymax, zmin, zmax)
+        parts: dictonary mapping part IDs to `GeometryPart` objects
+    """
     file_path: str
     description_line1: str
     description_line2: str
@@ -401,14 +604,24 @@ class EnsightGeometryFile:
     parts: Dict[int, GeometryPart]  # part ID -> GeometryPart
 
     def read_nodes(self, part_id: int) -> np.ndarray:
+        """
+        Read nodes for given part
+
+        This is a helper method that opens the underlying file for you.
+
+        Returns:
+            2D ``(n, 3)`` array of int32
+        """
         part = self.parts[part_id]
         with open(self.file_path, "rb") as fp:
             return part.read_nodes(fp)
 
     def get_part_names(self) -> List[str]:
+        """Return list of part names"""
         return [part.part_name for part in self.parts.values()]
 
     def get_part_by_name(self, name: str) -> Optional[GeometryPart]:
+        """Return part with given name, or None"""
         for part in self.parts.values():
             if part.part_name == name:
                 return part
@@ -416,6 +629,7 @@ class EnsightGeometryFile:
 
     @classmethod
     def from_file_path(cls, file_path: str) -> "EnsightGeometryFile":
+        """Parse EnSight Gold geometry file"""
         extents = None
         parts = {}
 
@@ -476,20 +690,68 @@ class EnsightGeometryFile:
 
 @dataclass
 class EnsightVariableFile:
+    """
+    EnSight Gold binary variable file
+
+    To use it:
+
+        >>> from ensightreader import EnsightCaseFile
+        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> geofile = case.get_geometry_model()
+        >>> velocity_variable = case.get_variable("U")
+        >>> part_names = geofile.get_part_names()
+        >>> part = geofile.get_part_by_name(part_names[0])
+        >>> with open(velocity_variable.file_path, "rb") as fp_var:
+        ...     part_velocity = velocity_variable.read_node_data(fp_var, part.part_id)
+
+    .. note::
+        - there are some limitations for per-element variable files, see `EnsightVariableFile.read_element_data()`
+        - ``coordinates partial`` and ``coordinates undef`` is not supported
+
+    This objects contains metadata parsed from EnSight Gold
+    variable file; it does not hold any variable data arrays,
+    but after it's been created it can read any such data on demand.
+
+    Attributes:
+        file_path: path to the actual variable file (no wildcards)
+        description_line: line in header
+        variable_location: where the variable is defined (elements or nodes)
+        variable_type: type of the variable (scalar, ...)
+        part_offsets: dictionary mapping part IDs to offset to 'part' line in file
+        part_element_offsets: for per-element variables, this holds a dictionary
+            mapping ``(part ID, element type)`` tuples to offset to 'element type' line in file
+    """
     file_path: str
     description_line: str
     variable_location: VariableLocation
     variable_type: VariableType
-    part_offsets: Dict[int, int]  # part ID -> offset to 'part' line in file
-    part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]]  # (part ID, element type) -> offset to
-                                                                        # 'element type' line (for per-node variables
-                                                                        # part_element_offsets is None)
+    part_offsets: Dict[int, int]
+    part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]]
     geometry_file: EnsightGeometryFile
 
     def is_defined_for_part_id(self, part_id: int) -> bool:
+        """Return True if variable is defined for given part, else False"""
         return part_id in self.part_offsets
 
     def read_node_data(self, fp: io.BufferedIOBase, part_id: int) -> Optional[np.ndarray]:
+        """
+        Read per-node variable data for given part
+
+        .. note::
+            Variable is always either per-node or per-element;
+            be sure to call the right method for your data.
+
+        Args:
+            fp: opened variable file object in "rb" mode
+            part_id: part number for which to read data
+
+        Returns:
+            If the variable is not defined for the part, None is returned.
+            If the variable is defined and is a scalar, 1D array of float32 is returned.
+            Otherwise the returned value is 2D ``(n, k)`` array of float32
+            where ``n`` is number of nodes and ``k`` is number of values
+            based on variable type (vector, tensor).
+        """
         part = self.geometry_file.parts[part_id]
 
         if not self.variable_location == VariableLocation.PER_NODE:
@@ -512,6 +774,34 @@ class EnsightVariableFile:
         return arr
 
     def read_element_data(self, fp: io.BufferedIOBase, part_id: int, element_type: ElementType) -> Optional[np.ndarray]:
+        """
+        Read per-element variable data for given part and element type
+
+        Due to how EnSight Gold format works, variable file mirrors the geometry file
+        in that per-element values are (alas) defined separately for each element block.
+        This introduces edge cases (missing element blocks so that the variable could only be
+        partially defined for the part; multiple element blocks of the same element type; etc.)
+        which may be tedious to handle. This implementation relies on the assumption that there
+        are no repeated blocks of the same type.
+
+        .. note::
+            Variable is always either per-node or per-element;
+            be sure to call the right method for your data.
+
+        Args:
+            fp: opened variable file object in "rb" mode
+            part_id: part number for which to read data
+            element_type: element type for which to read data (typically,
+                you want to iterate over element blocks in the part and
+                retrieve data for their respective element types)
+
+        Returns:
+            If the variable is not defined for the part, None is returned.
+            If the variable is defined and is a scalar, 1D array of float32 is returned.
+            Otherwise the returned value is 2D ``(n, k)`` array of float32
+            where ``n`` is number of nodes and ``k`` is number of values
+            based on variable type (vector, tensor).
+        """
         part = self.geometry_file.parts[part_id]
 
         if not self.variable_location == VariableLocation.PER_ELEMENT:
@@ -534,6 +824,7 @@ class EnsightVariableFile:
     @classmethod
     def from_file_path(cls, file_path: str, variable_location: VariableLocation, variable_type: VariableType,
                        geofile: EnsightGeometryFile) -> "EnsightVariableFile":
+        """Used internally by `EnsightVariableFileSet.get_file()`"""
         part_offsets = {}
         part_element_offsets = {} if variable_location == VariableLocation.PER_ELEMENT else None
 
@@ -625,12 +916,23 @@ def fill_wildcard(filename: str, value: int) -> str:
 
 @dataclass
 class EnsightGeometryFileSet:
+    """
+    Helper object for loading geometry files
+
+    This is used by `EnsightCaseFile.get_geometry_model()` to give you `EnsightGeometryFile`.
+
+    Attributes:
+        casefile_dir_path: path to casefile directory (root for relative paths in casefile)
+        timeset: time set in which the geometry is defined, or None if it's not transient
+        filename: path to the data file(s), including ``*`` wildcards if transient
+    """
     casefile_dir_path: str
     timeset: Optional[Timeset]
     filename: str
     # change_coords_only: bool = False
 
     def get_file(self, timestep: int = 0) -> EnsightGeometryFile:
+        """Return geometry for given timestep (use 0 if not transient)"""
         if self.timeset is None:
             timestep_filename = self.filename
         else:
@@ -642,14 +944,40 @@ class EnsightGeometryFileSet:
 
 @dataclass
 class EnsightVariableFileSet:
+    """
+    Helper object for loading variable files
+
+    This is used by `EnsightCaseFile.get_variable()` to give you `EnsightVariableFile`.
+
+    Attributes:
+        casefile_dir_path: path to casefile directory (root for relative paths in casefile)
+        timeset: time set in which the variable is defined, or None if it's not transient
+        variable_location: where the variable is defined (elements or nodes)
+        variable_type: type of the variable (scalar, ...)
+        variable_name: name of the variable ('description' field in casefile)
+        filename: path to the data file(s), including ``*`` wildcards if transient
+    """
     casefile_dir_path: str
     timeset: Optional[Timeset]
     variable_location: VariableLocation
     variable_type: VariableType
-    variable_name: str  # 'description' field in casefile
+    variable_name: str
     filename: str
 
     def get_file(self, geofile: EnsightGeometryFile, timestep: int = 0) -> EnsightVariableFile:
+        """
+        Return variable for given timestep (use 0 if not transient)
+
+        .. note::
+            Due to how EnSight Gold format works, you need to have matching geofile
+            already parsed before you attempt to read the variable file. The variable
+            file itself (alas) does not give lengths of the arrays it contains.
+
+            For transient geometry combined with transient variable, pay extra care because
+            they have to match - different timesteps can have different number of elements,
+            nodes, etc.
+
+        """
         # XXX be sure to match geofile and timestep!
         if self.timeset is None:
             timestep_filename = self.filename
@@ -672,6 +1000,50 @@ def read_numbers_from_text_file(path: str, type_: type) -> List:
 
 @dataclass
 class EnsightCaseFile:
+    """
+    EnSight Gold case file
+
+    To load a case, use:
+
+        >>> from ensightreader import EnsightCaseFile
+        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> geofile = case.get_geometry_model()
+        >>> velocity_variable = case.get_variable("U")
+
+    EnSight Gold casefile is text file with description of the case and links to
+    data files where the actual geometry and variables are stored.
+
+    Since the case may be transient and therefore have multiple
+    data files for the same variable, etc., there is an indirection:
+    the actual data is accessed using `EnsightGeometryFile` and
+    `EnsightVariableFile` objects, which are constructed using
+    `EnsightGeometryFileSet`, `EnsightVariableFileSet` helper objects
+    inside `EnsightCaseFile`.
+
+    .. note::
+        - for geometry, only ``model`` is supported (no ``measured``,
+          ``match`` or ``boundary``)
+        - only unstructured grid (``coordinates``) geometry is supported;
+          structured parts are not supported
+        - filesets and single-file cases are not supported; only ``C Binary``
+          files are supported
+        - ``change_coords_only`` is not supported
+        - some variable types are unsupported, see `VariableType`
+        - ghost cells are not supported
+        - cases with more than one time set are supported,
+          but you may not be able to use `EnsightCaseFile.get_variable()`
+          since the library expects geometry and variable time sets to match;
+          if you know which geofile belongs to which variable file you
+          can read the variable files using `EnsightVariableFileSet.get_file()`.
+
+    Attributes:
+        casefile_path: path to the ``*.case`` file
+        geometry_model: accessor to the ``model`` geometry data
+        variables: dictionary mapping variable names keys to variable data accessors
+        timesets: dictionary mapping time set IDs to time set description objects
+
+    """
+
     casefile_path: str
     geometry_model: EnsightGeometryFileSet
     variables: Dict[str, EnsightVariableFileSet]  # variable name -> EnsightVariableFileSet
@@ -680,11 +1052,34 @@ class EnsightCaseFile:
     _variable_file_cache: Dict[Tuple[int, str], EnsightVariableFile] = field(default_factory=dict, repr=False)
 
     def get_geometry_model(self, timestep: int = 0) -> EnsightGeometryFile:
+        """
+        Get geometry for given timestep
+
+        .. note::
+            The returned `EnsightGeometryFile` is cached, so it will not
+            parse the file again when you request the geometry again.
+
+        Args:
+            timestep: number of timestep, starting from zero (for non-transient
+                geometry, use 0)
+        """
         if timestep not in self._geometry_file_cache:
             self._geometry_file_cache[timestep] = self.geometry_model.get_file(timestep)
         return self._geometry_file_cache[timestep]
 
     def get_variable(self, name: str, timestep: int = 0) -> EnsightVariableFile:
+        """
+        Get variable for given timestep
+
+        .. note::
+            The returned `EnsightVariableFile` is cached, so it will not
+            parse the file again when you request the variable again.
+
+        Args:
+            name: name of the variable
+            timestep: number of timestep, starting from zero (for non-transient
+                variable, use 0)
+        """
         cache_key = (name, timestep)
         if cache_key not in self._variable_file_cache:
             variable_fileset = self.variables.get(name)
@@ -704,17 +1099,35 @@ class EnsightCaseFile:
         return self._geometry_file_cache[cache_key]
 
     def is_transient(self) -> bool:
+        """Return True if the case is transient (has at least one time set defined)"""
         return len(self.timesets) > 0
 
     def get_node_variables(self) -> List[str]:
+        """Return names of variables defined per-node"""
         return [name for name, variable in self.variables.items()
                 if variable.variable_location == VariableLocation.PER_NODE]
 
     def get_element_variables(self) -> List[str]:
+        """Return names of variables defined per-element"""
         return [name for name, variable in self.variables.items()
                 if variable.variable_location == VariableLocation.PER_ELEMENT]
 
     def get_time_values(self, timeset_id: Optional[int] = None) -> Optional[List[float]]:
+        """
+        Return time values for given time set
+
+        This will return time values as specified in the case file (this could be
+        physical time in seconds, or something else). Timesteps ``0``, ``1``, ... occur
+        at times ``case.get_time_values()[0]``, ``case.get_time_values()[1]``, ...
+
+        Args:
+            timeset_id: time set ID for which to return time values - if there are
+                less than two time sets, you can omit this parameter
+
+        Returns:
+            List of time values, or None if there are no time sets defined
+
+        """
         if not self.is_transient():
             return None
 
@@ -731,10 +1144,23 @@ class EnsightCaseFile:
         return self.timesets[timeset_id].time_values
 
     def get_variables(self) -> List[str]:
+        """Return list of variable names"""
         return list(self.variables.keys())
 
     @classmethod
     def from_file(cls, casefile_path: str) -> "EnsightCaseFile":
+        """
+        Read EnSight Gold case
+
+        .. note::
+            This only reads the casefile, not any data files.
+            Any geometry or variable data that you want to read
+            must be read explicitly.
+
+        Args:
+            casefile_path: path to the ``*.case`` file
+
+        """
         casefile_dir_path = op.dirname(casefile_path)
         geometry_model = None
         geometry_model_ts = None
