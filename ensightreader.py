@@ -297,6 +297,9 @@ class GeometryPart:
     def number_of_elements(self) -> int:
         return sum(block.number_of_elements for block in self.element_blocks)
 
+    def get_number_of_elements_of_type(self, element_type: ElementType) -> int:
+        return sum(block.number_of_elements for block in self.element_blocks if block.element_type == element_type)
+
     @classmethod
     def from_file(cls, fp: io.BufferedIOBase, node_id_handling: IdHandling, element_id_handling: IdHandling):
         offset = fp.tell()
@@ -479,6 +482,9 @@ class EnsightVariableFile:
                                                                         # part_element_offsets is None)
     geometry_file: EnsightGeometryFile
 
+    def is_defined_for_part_id(self, part_id: int) -> bool:
+        return part_id in self.part_offsets
+
     def read_node_data(self, fp: io.BufferedIOBase, part_id: int) -> Optional[np.ndarray]:
         part = self.geometry_file.parts[part_id]
 
@@ -501,7 +507,25 @@ class EnsightVariableFile:
             arr = arr.reshape((n, k), order="F")
         return arr
 
-    # TODO read_element_data()
+    def read_element_data(self, fp: io.BufferedIOBase, part_id: int, element_type: ElementType) -> Optional[np.ndarray]:
+        part = self.geometry_file.parts[part_id]
+
+        if not self.variable_location == VariableLocation.PER_ELEMENT:
+            raise ValueError("Variable is not per element")
+
+        offset = self.part_element_offsets.get((part_id, element_type))
+        if offset is None:
+            return None
+
+        fp.seek(offset)
+        assert read_line(fp).startswith(element_type.value)
+
+        n = part.get_number_of_elements_of_type(element_type)
+        k = VALUES_FOR_VARIABLE_TYPE[self.variable_type]
+        arr = read_floats(fp, n*k)
+        if k > 1:
+            arr = arr.reshape((n, k), order="F")
+        return arr
 
     @classmethod
     def from_file_path(cls, file_path: str, variable_location: VariableLocation, variable_type: VariableType,
