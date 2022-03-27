@@ -121,6 +121,10 @@ class ElementType(Enum):
     def dimension(self) -> int:
         return DIMENSION_PER_ELEMENT[self]
 
+    @property
+    def nodes_per_element(self) -> int:
+        return NODES_PER_ELEMENT[self]
+
 NODES_PER_ELEMENT = {
     ElementType.POINT: 1,
     ElementType.BAR2: 2,
@@ -701,6 +705,14 @@ class EnsightCaseFile:
 
     def is_transient(self) -> bool:
         return len(self.timesets) > 0
+
+    def get_node_variables(self) -> List[str]:
+        return [name for name, variable in self.variables.items()
+                if variable.variable_location == VariableLocation.PER_NODE]
+
+    def get_element_variables(self) -> List[str]:
+        return [name for name, variable in self.variables.items()
+                if variable.variable_location == VariableLocation.PER_ELEMENT]
 
     def get_time_values(self, timeset_id: Optional[int] = None) -> Optional[List[float]]:
         if not self.is_transient():
