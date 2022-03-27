@@ -689,7 +689,7 @@ class EnsightCaseFile:
 
             geofile_timeset = self.geometry_model.timeset
             variable_timeset = variable_fileset.timeset
-            if geofile_timeset is not None or variable_timeset is not None:
+            if geofile_timeset is not None and variable_timeset is not None:
                 if geofile_timeset.timeset_id != variable_timeset.timeset_id:
                     raise NotImplementedError(f"Geometry and variable {name!r} use different timesets, "
                                               f"this is currently not handled (if you want this, please call "
