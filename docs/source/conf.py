@@ -32,7 +32,8 @@ author = 'Tomas Karabela'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
-    'enum_tools.autoenum'
+    'enum_tools.autoenum',
+    'sphinx.ext.autosectionlabel',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

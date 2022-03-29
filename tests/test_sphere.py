@@ -1,5 +1,5 @@
 import numpy as np
-
+import mmap
 from ensightreader import EnsightCaseFile, EnsightGeometryFile, GeometryPart, IdHandling, ElementType
 
 
@@ -53,6 +53,61 @@ def test_read_sphere_case():
     variable = case.get_variable("RTData")
     with open(variable.file_path, "rb") as fp:
         variable_data = variable.read_node_data(fp, part.part_id)
+        assert variable_data.shape == VARIABLE_DATA_REF.shape
+        assert variable_data.dtype == VARIABLE_DATA_REF.dtype
+        assert np.allclose(variable_data, VARIABLE_DATA_REF)
+
+
+def test_read_sphere_case_mmap():
+    path = "./data/sphere/sphere.case"
+
+    # check casefile
+    case = EnsightCaseFile.from_file(path)
+
+    assert case.get_variables() == ["RTData"]
+    assert case.get_node_variables() == ["RTData"]
+    assert case.get_element_variables() == []
+
+    assert not case.is_transient()
+    assert case.get_time_values() is None
+
+    # check geofile
+    geofile = case.get_geometry_model()
+    assert isinstance(geofile, EnsightGeometryFile)
+
+    assert geofile.description_line1.startswith("Written by VTK EnSight Writer")
+    assert geofile.description_line2.startswith("No Title was Specified")
+    assert geofile.node_id_handling == IdHandling.GIVEN
+    assert geofile.element_id_handling == IdHandling.GIVEN
+    assert geofile.extents is None
+
+    assert geofile.get_part_names() == ["VTK Part"]
+    part = geofile.get_part_by_name("VTK Part")
+    assert isinstance(part, GeometryPart)
+    assert part.part_name == "VTK Part"
+    assert geofile.parts[part.part_id] is part
+    assert part.part_id == 1
+    assert part.number_of_nodes == 50
+    assert part.number_of_elements == 96
+
+    with open(geofile.file_path, "rb") as fp_geo, mmap.mmap(fp_geo.fileno(), 0, access=mmap.ACCESS_READ) as mm_geo:
+        nodes = part.read_nodes(mm_geo)
+        assert nodes.shape == NODES_REF.shape
+        assert nodes.dtype == NODES_REF.dtype
+        assert np.allclose(nodes, NODES_REF)
+
+        assert len(part.element_blocks) == 1
+        block = part.element_blocks[0]
+        assert block.element_type == ElementType.TRIA3
+        connectivity = block.read_connectivity(mm_geo)
+        assert connectivity.shape == (96, 3)
+        assert connectivity.dtype == np.int32
+        # TODO check connectivity
+
+    # check variables
+    variable = case.get_variable("RTData")
+    with open(variable.file_path, "rb") as fp_var, mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_READ) as mm_var:
+        variable_data = variable.read_node_data(mm_var, part.part_id)
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)

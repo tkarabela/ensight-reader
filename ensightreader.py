@@ -23,10 +23,14 @@ import io
 import os
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union, Type
 import numpy as np
 import re
 import os.path as op
+import mmap
+
+
+SeekableBufferedReader = Union[io.BufferedReader, mmap.mmap]
 
 
 class EnsightReaderError(Exception):
@@ -275,7 +279,7 @@ class UnstructuredElementBlock:
     element_id_handling: IdHandling
     part_id: int
 
-    def read_connectivity(self, fp: io.BufferedIOBase) -> np.ndarray:
+    def read_connectivity(self, fp: SeekableBufferedReader) -> np.ndarray:
         """
         Read connectivity (for elements other than NSIDED/NFACED)
 
@@ -305,7 +309,7 @@ class UnstructuredElementBlock:
         arr = read_ints(fp, self.number_of_elements * nodes_per_element)
         return arr.reshape((self.number_of_elements, nodes_per_element), order="C")
 
-    def read_connectivity_nsided(self, fp: io.BufferedIOBase) -> Tuple[np.ndarray, np.ndarray]:
+    def read_connectivity_nsided(self, fp: SeekableBufferedReader) -> Tuple[np.ndarray, np.ndarray]:
         """
         Read connectivity (for NSIDED elements)
 
@@ -333,7 +337,7 @@ class UnstructuredElementBlock:
         polygon_connectivity = read_ints(fp, polygon_node_counts.sum())
         return polygon_node_counts, polygon_connectivity
 
-    def read_connectivity_nfaced(self, fp: io.BufferedIOBase) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def read_connectivity_nfaced(self, fp: SeekableBufferedReader) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Read connectivity (for NFACED elements)
 
@@ -366,7 +370,7 @@ class UnstructuredElementBlock:
         return polyhedra_face_counts, face_node_counts, face_connectivity
 
     @classmethod
-    def from_file(cls, fp: io.BufferedIOBase, element_id_handling: IdHandling, part_id: int):
+    def from_file(cls, fp: SeekableBufferedReader, element_id_handling: IdHandling, part_id: int):
         """Used internally by `GeometryPart.from_file()`"""
         offset = fp.tell()
 
@@ -441,7 +445,7 @@ class GeometryPart:
     node_id_handling: IdHandling
     element_id_handling: IdHandling
 
-    def read_nodes(self, fp: io.BufferedIOBase) -> np.ndarray:
+    def read_nodes(self, fp: SeekableBufferedReader) -> np.ndarray:
         """
         Read node coordinates for this part
 
@@ -482,7 +486,7 @@ class GeometryPart:
         return sum(block.number_of_elements for block in self.element_blocks if block.element_type == element_type)
 
     @classmethod
-    def from_file(cls, fp: io.BufferedIOBase, node_id_handling: IdHandling, element_id_handling: IdHandling):
+    def from_file(cls, fp: SeekableBufferedReader, node_id_handling: IdHandling, element_id_handling: IdHandling):
         """Used internally by `EnsightGeometryFile.from_file()`"""
         offset = fp.tell()
         fp.seek(0, os.SEEK_END)
@@ -530,39 +534,40 @@ class GeometryPart:
             )
 
 
-def read_array(fp: io.BufferedIOBase, count: int, dtype: np.dtype) -> np.ndarray:
-    arr = np.empty((count,), dtype=dtype)
-    bytes_to_read = arr.data.nbytes
-    n = fp.readinto(arr.data)
-    if n != bytes_to_read:
-        raise EnsightReaderError(f"Only read {n} bytes, expected {bytes_to_read} bytes", fp)
+def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -> np.ndarray:
+    bytes_to_read = count * dtype().itemsize
+    buffer = fp.read(bytes_to_read)
+    if len(buffer) != bytes_to_read:
+        raise EnsightReaderError(f"Only read {len(buffer)} bytes, expected {bytes_to_read} bytes", fp)
+
+    arr = np.frombuffer(buffer, dtype=dtype)
     return arr
 
 
-def read_ints(fp: io.BufferedIOBase, count: int) -> np.ndarray:
+def read_ints(fp: SeekableBufferedReader, count: int) -> np.ndarray:
     return read_array(fp, count, np.int32)
 
 
-def read_int(fp: io.BufferedIOBase) -> int:
+def read_int(fp: SeekableBufferedReader) -> int:
     return int(read_ints(fp, 1)[0])
 
 
-def read_floats(fp: io.BufferedIOBase, count: int) -> np.ndarray:
+def read_floats(fp: SeekableBufferedReader, count: int) -> np.ndarray:
     return read_array(fp, count, np.float32)
 
 
-def read_string(fp: io.BufferedIOBase, count: int) -> str:
+def read_string(fp: SeekableBufferedReader, count: int) -> str:
     data = fp.read(count)
     if len(data) != count:
         raise EnsightReaderError(f"Only read {len(data)} bytes, expected {count} bytes", fp)
     return data.decode("ascii", "replace")
 
 
-def read_line(fp: io.BufferedIOBase) -> str:
+def read_line(fp: SeekableBufferedReader) -> str:
     return read_string(fp, 80)
 
 
-def peek_line(fp: io.BufferedIOBase) -> str:
+def peek_line(fp: SeekableBufferedReader) -> str:
     s = read_string(fp, 80)
     fp.seek(-len(s), os.SEEK_CUR)
     return s
@@ -602,19 +607,6 @@ class EnsightGeometryFile:
     element_id_handling: IdHandling
     extents: Optional[np.ndarray]
     parts: Dict[int, GeometryPart]  # part ID -> GeometryPart
-
-    def read_nodes(self, part_id: int) -> np.ndarray:
-        """
-        Read nodes for given part
-
-        This is a helper method that opens the underlying file for you.
-
-        Returns:
-            2D ``(n, 3)`` array of int32
-        """
-        part = self.parts[part_id]
-        with open(self.file_path, "rb") as fp:
-            return part.read_nodes(fp)
 
     def get_part_names(self) -> List[str]:
         """Return list of part names"""
@@ -733,7 +725,7 @@ class EnsightVariableFile:
         """Return True if variable is defined for given part, else False"""
         return part_id in self.part_offsets
 
-    def read_node_data(self, fp: io.BufferedIOBase, part_id: int) -> Optional[np.ndarray]:
+    def read_node_data(self, fp: SeekableBufferedReader, part_id: int) -> Optional[np.ndarray]:
         """
         Read per-node variable data for given part
 
@@ -773,7 +765,7 @@ class EnsightVariableFile:
             arr = arr.reshape((n, k), order="F")
         return arr
 
-    def read_element_data(self, fp: io.BufferedIOBase, part_id: int, element_type: ElementType) -> Optional[np.ndarray]:
+    def read_element_data(self, fp: SeekableBufferedReader, part_id: int, element_type: ElementType) -> Optional[np.ndarray]:
         """
         Read per-element variable data for given part and element type
 
