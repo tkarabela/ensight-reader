@@ -20,13 +20,13 @@ from the VTK library.
 ```python
 from ensightreader import EnsightCaseFile
 
-   case = EnsightCaseFile.from_file("example.case")
-   geofile = case.get_geometry_model()
+case = EnsightCaseFile.from_file("example.case")
+geofile = case.get_geometry_model()
 
-   part_names = geofile.get_part_names()                # ["internalMesh", ...]
-   part = geofile.get_part_by_name(part_names[0])
-   N = part.number_of_nodes
+part_names = geofile.get_part_names()                # ["internalMesh", ...]
+part = geofile.get_part_by_name(part_names[0])
+N = part.number_of_nodes
 
-   with open(geofile.file_path, "rb") as fp_geo:
-      node_coordinates = part.read_coordinates(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
+with open(geofile.file_path, "rb") as fp_geo:
+  node_coordinates = part.read_coordinates(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
 ```
