@@ -18,9 +18,9 @@ from the VTK library. For more information, see :ref:`Comparison with VTK librar
 
 ::
 
-   from ensightreader import EnsightCaseFile
+   import ensightreader
 
-   case = EnsightCaseFile.from_file("example.case")
+   case = ensightreader.read_case("example.case")
    geofile = case.get_geometry_model()
 
    part_names = geofile.get_part_names()                # ["internalMesh", ...]

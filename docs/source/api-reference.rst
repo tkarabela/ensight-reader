@@ -7,6 +7,8 @@ API Reference
 Case file
 ---------
 
+.. autofunction:: read_case
+
 .. autoclass:: EnsightCaseFile
     :members:
 .. autoclass:: EnsightGeometryFileSet

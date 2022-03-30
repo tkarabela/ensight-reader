@@ -1,13 +1,13 @@
 import numpy as np
 import mmap
-from ensightreader import EnsightCaseFile, EnsightGeometryFile, GeometryPart, IdHandling, ElementType
+from ensightreader import read_case, EnsightGeometryFile, GeometryPart, IdHandling, ElementType
 
 
 def test_read_sphere_case():
     path = "./data/sphere/sphere.case"
 
     # check casefile
-    case = EnsightCaseFile.from_file(path)
+    case = read_case(path)
 
     assert case.get_variables() == ["RTData"]
     assert case.get_node_variables() == ["RTData"]
@@ -62,7 +62,7 @@ def test_read_sphere_case_mmap():
     path = "./data/sphere/sphere.case"
 
     # check casefile
-    case = EnsightCaseFile.from_file(path)
+    case = read_case(path)
 
     assert case.get_variables() == ["RTData"]
     assert case.get_node_variables() == ["RTData"]

@@ -265,8 +265,8 @@ class UnstructuredElementBlock:
 
     To use it:
 
-        >>> from ensightreader import EnsightCaseFile, ElementType
-        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> from ensightreader import read_case, ElementType
+        >>> case = read_case("example.case")
         >>> geofile = case.get_geometry_model()
         >>> part_names = geofile.get_part_names()
         >>> part = geofile.get_part_by_name(part_names[0])
@@ -428,8 +428,8 @@ class GeometryPart:
 
     To use it:
 
-        >>> from ensightreader import EnsightCaseFile
-        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> import ensightreader
+        >>> case = ensightreader.read_case("example.case")
         >>> geofile = case.get_geometry_model()
         >>> part_names = geofile.get_part_names()
         >>> part = geofile.get_part_by_name(part_names[0])
@@ -593,8 +593,8 @@ class EnsightGeometryFile:
 
     To use it:
 
-        >>> from ensightreader import EnsightCaseFile
-        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> import ensightreader
+        >>> case = ensightreader.read_case("example.case")
         >>> geofile = case.get_geometry_model()
         >>> part_names = geofile.get_part_names()
         >>> part = geofile.get_part_by_name(part_names[0])
@@ -625,10 +625,21 @@ class EnsightGeometryFile:
         """Return list of part names"""
         return [part.part_name for part in self.parts.values()]
 
+    def get_part_ids(self) -> List[int]:
+        """Return list of part IDs"""
+        return [part.part_id for part in self.parts.values()]
+
     def get_part_by_name(self, name: str) -> Optional[GeometryPart]:
         """Return part with given name, or None"""
         for part in self.parts.values():
             if part.part_name == name:
+                return part
+        return None
+
+    def get_part_by_id(self, part_id: int) -> Optional[GeometryPart]:
+        """Return part with given part ID, or None"""
+        for part in self.parts.values():
+            if part.part_id == part_id:
                 return part
         return None
 
@@ -700,8 +711,8 @@ class EnsightVariableFile:
 
     To use it:
 
-        >>> from ensightreader import EnsightCaseFile
-        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> import ensightreader
+        >>> case = ensightreader.read_case("example.case")
         >>> geofile = case.get_geometry_model()
         >>> velocity_variable = case.get_variable("U")
         >>> part_names = geofile.get_part_names()
@@ -1010,8 +1021,8 @@ class EnsightCaseFile:
 
     To load a case, use:
 
-        >>> from ensightreader import EnsightCaseFile
-        >>> case = EnsightCaseFile.from_file("example.case")
+        >>> import ensightreader
+        >>> case = ensightreader.read_case("example.case")
         >>> geofile = case.get_geometry_model()
         >>> velocity_variable = case.get_variable("U")
 
@@ -1309,3 +1320,20 @@ class EnsightCaseFile:
             variables=variables,
             timesets=timesets,
         )
+
+
+def read_case(path: str) -> EnsightCaseFile:
+    """
+    Read EnSight Gold case
+
+    This will only parse the case file, not any data files.
+    Use the returned object to load whichever data you need.
+
+    Args:
+        path: Path to the ``*.case`` file
+
+    Returns:
+        `EnsightCaseFile` object
+
+    """
+    return EnsightCaseFile.from_file(path)

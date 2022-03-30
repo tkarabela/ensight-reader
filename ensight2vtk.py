@@ -2,7 +2,7 @@
 import mmap
 import re
 import sys
-from ensightreader import EnsightCaseFile, ElementType, VariableType
+from ensightreader import read_case, ElementType, VariableType
 import argparse
 import os.path as op
 
@@ -22,7 +22,7 @@ def main() -> int:
     output_vtk_prefix, _ = op.splitext(output_vtk_path_given)
 
     print("Reading input EnSight case", ensight_case_path)
-    case = EnsightCaseFile.from_file(ensight_case_path)
+    case = read_case(ensight_case_path)
     geofile = case.get_geometry_model()
 
     print("I see", len(geofile.get_part_names()), "parts in case")

@@ -2,7 +2,7 @@
 
 import re
 import sys
-from ensightreader import EnsightCaseFile
+import ensightreader
 import numpy as np
 import argparse
 
@@ -20,7 +20,7 @@ def main() -> int:
     part_name_regex = args.only_parts
 
     print("Reading input EnSight case", ensight_case_path)
-    case = EnsightCaseFile.from_file(ensight_case_path)
+    case = ensightreader.read_case(ensight_case_path)
     geofile = case.get_geometry_model()
 
     print("I see", len(geofile.get_part_names()), "parts in case")
