@@ -58,7 +58,7 @@ VTK_ELEMENT_TYPES = {
 }
 
 
-def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str):
+def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str) -> None:
     geofile = case.get_geometry_model()
     part = geofile.parts[part_id]
 
@@ -124,6 +124,7 @@ def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str):
                 with open(variable.file_path, "rb") as fp_var,\
                         mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_READ) as mm_var:
                     data = variable.read_node_data(mm_var, part_id)
+                    assert data is not None
 
                     if variable.variable_type == VariableType.SCALAR:
                         print("SCALARS", variable_name.replace(" ", "_"), "float 1", file=fp_vtk)

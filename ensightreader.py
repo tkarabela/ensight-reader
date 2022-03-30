@@ -19,18 +19,20 @@
 # THE SOFTWARE.
 
 
-import io
 import os
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Union, Type
+from typing import List, Dict, Optional, Tuple, Union, Type, TypeVar, BinaryIO, TextIO
 import numpy as np
 import re
 import os.path as op
 import mmap
 
 
-SeekableBufferedReader = Union[io.BufferedReader, mmap.mmap]
+T = TypeVar('T')
+SeekableBufferedReader = Union[BinaryIO, mmap.mmap]
+Float32NDArray = np.ndarray  # TODO upgrade to npt.NDArray[np.float32]
+Int32NDArray = np.ndarray  # TODO upgrade to npt.NDArray[np.int32]
 
 
 class EnsightReaderError(Exception):
@@ -45,7 +47,7 @@ class EnsightReaderError(Exception):
             as other files are binary)
 
     """
-    def __init__(self, msg: str, fp: Optional[io.BufferedIOBase] = None, lineno: Optional[int] = None):
+    def __init__(self, msg: str, fp: Optional[Union[TextIO, SeekableBufferedReader]] = None, lineno: Optional[int] = None):
         self.file_path = getattr(fp, "name", None)
         self.file_offset = fp.tell() if fp else None
         self.file_lineno = lineno
@@ -72,7 +74,7 @@ class IdHandling(Enum):
     @property
     def ids_present(self) -> bool:
         """Return True if IDs are present in geometry file, otherwise False"""
-        return self == self.GIVEN or self == self.IGNORE
+        return self in (self.GIVEN, self.IGNORE)
 
 
 class VariableLocation(Enum):
@@ -108,6 +110,7 @@ VALUES_FOR_VARIABLE_TYPE = {
     VariableType.TENSOR_SYMM: 6,
     VariableType.TENSOR_ASYM: 9,
 }
+
 
 class ElementType(Enum):
     """
@@ -182,6 +185,15 @@ class ElementType(Enum):
         """
         return NODES_PER_ELEMENT[self]
 
+    def has_constant_number_of_nodes_per_element(self) -> bool:
+        """
+        Return True if element type has constant number of nodes defining each element, else False
+
+        This is True for all element types except NSIDED and NFACED.
+        """
+        return self in NODES_PER_ELEMENT
+
+
 NODES_PER_ELEMENT = {
     ElementType.POINT: 1,
     ElementType.BAR2: 2,
@@ -221,6 +233,7 @@ DIMENSION_PER_ELEMENT = {
 }
 
 SIZE_INT = SIZE_FLOAT = 4
+
 
 @dataclass
 class Timeset:
@@ -279,7 +292,7 @@ class UnstructuredElementBlock:
     element_id_handling: IdHandling
     part_id: int
 
-    def read_connectivity(self, fp: SeekableBufferedReader) -> np.ndarray:
+    def read_connectivity(self, fp: SeekableBufferedReader) -> Int32NDArray:
         """
         Read connectivity (for elements other than NSIDED/NFACED)
 
@@ -309,7 +322,7 @@ class UnstructuredElementBlock:
         arr = read_ints(fp, self.number_of_elements * nodes_per_element)
         return arr.reshape((self.number_of_elements, nodes_per_element), order="C")
 
-    def read_connectivity_nsided(self, fp: SeekableBufferedReader) -> Tuple[np.ndarray, np.ndarray]:
+    def read_connectivity_nsided(self, fp: SeekableBufferedReader) -> Tuple[Int32NDArray, Int32NDArray]:
         """
         Read connectivity (for NSIDED elements)
 
@@ -337,7 +350,7 @@ class UnstructuredElementBlock:
         polygon_connectivity = read_ints(fp, polygon_node_counts.sum())
         return polygon_node_counts, polygon_connectivity
 
-    def read_connectivity_nfaced(self, fp: SeekableBufferedReader) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def read_connectivity_nfaced(self, fp: SeekableBufferedReader) -> Tuple[Int32NDArray, Int32NDArray, Int32NDArray]:
         """
         Read connectivity (for NFACED elements)
 
@@ -370,7 +383,7 @@ class UnstructuredElementBlock:
         return polyhedra_face_counts, face_node_counts, face_connectivity
 
     @classmethod
-    def from_file(cls, fp: SeekableBufferedReader, element_id_handling: IdHandling, part_id: int):
+    def from_file(cls, fp: SeekableBufferedReader, element_id_handling: IdHandling, part_id: int) -> "UnstructuredElementBlock":
         """Used internally by `GeometryPart.from_file()`"""
         offset = fp.tell()
 
@@ -445,7 +458,7 @@ class GeometryPart:
     node_id_handling: IdHandling
     element_id_handling: IdHandling
 
-    def read_nodes(self, fp: SeekableBufferedReader) -> np.ndarray:
+    def read_nodes(self, fp: SeekableBufferedReader) -> Float32NDArray:
         """
         Read node coordinates for this part
 
@@ -486,7 +499,7 @@ class GeometryPart:
         return sum(block.number_of_elements for block in self.element_blocks if block.element_type == element_type)
 
     @classmethod
-    def from_file(cls, fp: SeekableBufferedReader, node_id_handling: IdHandling, element_id_handling: IdHandling):
+    def from_file(cls, fp: SeekableBufferedReader, node_id_handling: IdHandling, element_id_handling: IdHandling) -> "GeometryPart":
         """Used internally by `EnsightGeometryFile.from_file()`"""
         offset = fp.tell()
         fp.seek(0, os.SEEK_END)
@@ -544,7 +557,7 @@ def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -
     return arr
 
 
-def read_ints(fp: SeekableBufferedReader, count: int) -> np.ndarray:
+def read_ints(fp: SeekableBufferedReader, count: int) -> Int32NDArray:
     return read_array(fp, count, np.int32)
 
 
@@ -552,7 +565,7 @@ def read_int(fp: SeekableBufferedReader) -> int:
     return int(read_ints(fp, 1)[0])
 
 
-def read_floats(fp: SeekableBufferedReader, count: int) -> np.ndarray:
+def read_floats(fp: SeekableBufferedReader, count: int) -> Float32NDArray:
     return read_array(fp, count, np.float32)
 
 
@@ -605,7 +618,7 @@ class EnsightGeometryFile:
     description_line2: str
     node_id_handling: IdHandling
     element_id_handling: IdHandling
-    extents: Optional[np.ndarray]
+    extents: Optional[Float32NDArray]
     parts: Dict[int, GeometryPart]  # part ID -> GeometryPart
 
     def get_part_names(self) -> List[str]:
@@ -725,7 +738,7 @@ class EnsightVariableFile:
         """Return True if variable is defined for given part, else False"""
         return part_id in self.part_offsets
 
-    def read_node_data(self, fp: SeekableBufferedReader, part_id: int) -> Optional[np.ndarray]:
+    def read_node_data(self, fp: SeekableBufferedReader, part_id: int) -> Optional[Float32NDArray]:
         """
         Read per-node variable data for given part
 
@@ -765,7 +778,7 @@ class EnsightVariableFile:
             arr = arr.reshape((n, k), order="F")
         return arr
 
-    def read_element_data(self, fp: SeekableBufferedReader, part_id: int, element_type: ElementType) -> Optional[np.ndarray]:
+    def read_element_data(self, fp: SeekableBufferedReader, part_id: int, element_type: ElementType) -> Optional[Float32NDArray]:
         """
         Read per-element variable data for given part and element type
 
@@ -799,7 +812,7 @@ class EnsightVariableFile:
         if not self.variable_location == VariableLocation.PER_ELEMENT:
             raise ValueError("Variable is not per element")
 
-        offset = self.part_element_offsets.get((part_id, element_type))
+        offset = self.part_element_offsets.get((part_id, element_type))  # type: ignore[union-attr]
         if offset is None:
             return None
 
@@ -818,7 +831,7 @@ class EnsightVariableFile:
                        geofile: EnsightGeometryFile) -> "EnsightVariableFile":
         """Used internally by `EnsightVariableFileSet.get_file()`"""
         part_offsets = {}
-        part_element_offsets = {} if variable_location == VariableLocation.PER_ELEMENT else None
+        part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]] = {} if variable_location == VariableLocation.PER_ELEMENT else None
 
         with open(file_path, "rb") as fp:
             fp.seek(0, os.SEEK_END)
@@ -882,7 +895,7 @@ class EnsightVariableFile:
                                                      f"(handling of this is not implemented, please have only one block "
                                                      f"of each type)", fp)
 
-                        part_element_offsets[part_id, element_type] = part_element_offset
+                        part_element_offsets[part_id, element_type] = part_element_offset  # type: ignore[index]
 
                         # skip data
                         n = blocks[0].number_of_elements
@@ -981,8 +994,8 @@ class EnsightVariableFileSet:
                                                   variable_type=self.variable_type, geofile=geofile)
 
 
-def read_numbers_from_text_file(path: str, type_: type) -> List:
-    output = []
+def read_numbers_from_text_file(path: str, type_: Type[T]) -> List[T]:
+    output: List[T] = []
     with open(path) as fp:
         for line in fp:
             values = line.split()
@@ -1072,7 +1085,7 @@ class EnsightCaseFile:
             timestep: number of timestep, starting from zero (for non-transient
                 variable, use 0)
         """
-        cache_key = (name, timestep)
+        cache_key = (timestep, name)
         if cache_key not in self._variable_file_cache:
             variable_fileset = self.variables.get(name)
             if variable_fileset is None:
@@ -1087,8 +1100,8 @@ class EnsightCaseFile:
                                               f"EnsightVariableFileSet.get_file() with the correct geofile)")
 
             geofile = self.get_geometry_model(timestep)
-            self._geometry_file_cache[cache_key] = self.variables[name].get_file(geofile=geofile, timestep=timestep)
-        return self._geometry_file_cache[cache_key]
+            self._variable_file_cache[cache_key] = self.variables[name].get_file(geofile=geofile, timestep=timestep)
+        return self._variable_file_cache[cache_key]
 
     def is_transient(self) -> bool:
         """Return True if the case is transient (has at least one time set defined)"""
@@ -1155,10 +1168,10 @@ class EnsightCaseFile:
         """
         casefile_dir_path = op.dirname(casefile_path)
         geometry_model = None
-        geometry_model_ts = None
-        variables = {}
-        variables_ts = {}
-        timesets = {}
+        geometry_model_ts: Optional[int] = None
+        variables: Dict[str, EnsightVariableFileSet] = {}
+        variables_ts: Dict[str, int] = {}
+        timesets: Dict[int, Timeset] = {}
 
         with open(casefile_path) as fp:
             current_section = None
@@ -1176,8 +1189,8 @@ class EnsightCaseFile:
                     continue
 
                 if ":" in line:
-                    key, values = line.split(":", maxsplit=1)
-                    values = values.split()
+                    key, values_ = line.split(":", maxsplit=1)
+                    values: List[str] = values_.split()
                 else:
                     key = None
                     values = line.split()
@@ -1195,8 +1208,8 @@ class EnsightCaseFile:
                                                                     timeset=None,
                                                                     filename=filename)
                         elif len(values) == 2:
-                            ts, filename = values
-                            geometry_model_ts = int(ts)
+                            ts_, filename = values
+                            geometry_model_ts = int(ts_)
                             geometry_model = EnsightGeometryFileSet(casefile_dir_path,
                                                                     timeset=None,  # timeset will be added later
                                                                     filename=filename)
@@ -1206,7 +1219,7 @@ class EnsightCaseFile:
                     # note: measured, match, boundary geometries are not supported
                 elif current_section == "VARIABLE":
                     try:
-                        variable_type_, variable_location_ = key.split(" per ")
+                        variable_type_, variable_location_ = key.split(" per ")  # type: ignore[union-attr]
                         variable_type = VariableType(variable_type_)
                         variable_location = VariableLocation(variable_location_)
                     except ValueError:
@@ -1228,7 +1241,7 @@ class EnsightCaseFile:
                                                                     variable_type=variable_type,
                                                                     variable_name=description,
                                                                     filename=filename)
-                    variables_ts[description] = ts
+                    variables_ts[description] = ts  # type: ignore[assignment]
 
                 elif current_section == "TIME":
                     if key == "time set":
@@ -1236,11 +1249,16 @@ class EnsightCaseFile:
                         description = None
                         if len(values) == 2:
                             description = values[1]
-                        timesets[ts] = current_timeset = Timeset(ts, description, -1, [], [])
+                        timesets[ts] = current_timeset = Timeset(
+                            timeset_id=ts,
+                            description=description,
+                            number_of_steps=-1,
+                            filename_numbers=[],
+                            time_values=[])
                         current_timeset_file_start_number = None
                         current_timeset_filename_increment = None
                     elif key == "number of steps":
-                        current_timeset.number_of_steps = int(values[0])
+                        current_timeset.number_of_steps = int(values[0])  # type: ignore[union-attr]
                     elif key == "filename start number":
                         current_timeset_file_start_number = int(values[0])
                         if current_timeset_file_start_number is not None and current_timeset_filename_increment is not None:
@@ -1250,23 +1268,23 @@ class EnsightCaseFile:
                     elif key == "filename increment":
                         current_timeset_filename_increment = int(values[0])
                         if current_timeset_file_start_number is not None and current_timeset_filename_increment is not None:
-                            current_timeset.filename_numbers = list(range(current_timeset_file_start_number,
-                                                                          current_timeset.number_of_steps,
+                            current_timeset.filename_numbers = list(range(current_timeset_file_start_number,    # type: ignore[union-attr]
+                                                                          current_timeset.number_of_steps,      # type: ignore[union-attr]
                                                                           current_timeset_filename_increment))
                     elif key == "time values":
-                        current_timeset.time_values.extend(map(float, values))
+                        current_timeset.time_values.extend(map(float, values))  # type: ignore[union-attr]
                     elif key == "filename numbers":
                         raise EnsightReaderError("Unsupported timeset definition ('filename numbers' is not supported)",
                                                  fp, lineno)
                     elif key == "filename numbers file":
                         path = op.join(casefile_dir_path, values[0])
-                        current_timeset.filename_numbers = read_numbers_from_text_file(path, int)
+                        current_timeset.filename_numbers = read_numbers_from_text_file(path, int)  # type: ignore[union-attr]
                     elif key == "time values file":
                         path = op.join(casefile_dir_path, values[0])
-                        current_timeset.time_values = read_numbers_from_text_file(path, float)
+                        current_timeset.time_values = read_numbers_from_text_file(path, float)  # type: ignore[union-attr]
                     elif key is None:
                         # we expect that this is continuation of 'time values'
-                        current_timeset.time_values.extend(map(float, values))
+                        current_timeset.time_values.extend(map(float, values))  # type: ignore[union-attr]
                     else:
                         print(f"Warning: unsupported variable line ({casefile_path}:{lineno}), skipping")
                         continue
