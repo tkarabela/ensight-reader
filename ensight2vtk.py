@@ -1,13 +1,30 @@
 #!/usr/bin/env python
+
+"""
+ensight2vtk script
+==================
+
+This script converts parts from EnSight Gold case into
+files in VTK legacy ASCII format.
+
+Demonstrates reading steady-state geometry, node coordinates,
+connectivity, per-node and per-element variable data
+using memory-mapped I/O.
+
+For commandline usage, run the script with ``--help``.
+
+"""
+
 import mmap
 import re
 import sys
-from ensightreader import read_case, ElementType, VariableType
+from ensightreader import read_case, EnsightCaseFile, ElementType, VariableType
 import argparse
 import os.path as op
 
 
 def main() -> int:
+    """Main function of ensight2vtk.py"""
     parser = argparse.ArgumentParser()
     parser.add_argument("ensight_case", metavar="*.case", help="input EnSight Gold case (C Binary)")
     parser.add_argument("output_vtk", metavar="*.vtk", help="output VTK file (text)")
@@ -59,6 +76,13 @@ VTK_ELEMENT_TYPES = {
 
 
 def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str) -> None:
+    """
+    Write part from EnSight Gold case with given ID as VTK legacy ASCII format file
+
+    See also:
+        https://kitware.github.io/vtk-examples/site/VTKFileFormats/#simple-legacy-formats
+
+    """
     geofile = case.get_geometry_model()
     part = geofile.parts[part_id]
 

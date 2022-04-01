@@ -1,6 +1,20 @@
 Library design & HOWTO
 ======================
 
+Code examples
+-------------
+
+The library comes with scripts that use it to convert EnSight Gold into
+other data formats. These are mostly useful for reference as they
+output data in text format, making them unsuitable for production use
+with large models.
+
+.. automodule:: ensight2obj
+    :members:
+
+.. automodule:: ensight2vtk
+    :members:
+
 Memory and file management
 --------------------------
 

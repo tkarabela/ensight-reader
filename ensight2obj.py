@@ -1,5 +1,19 @@
 #!/usr/bin/env python
 
+"""
+ensight2obj script
+==================
+
+This script converts surface elements of EnSight Gold parts
+into OBJ format (text). EnSight parts are represented as OBJ groups.
+
+Demonstrates reading steady-state geometry, node coordinates,
+connectivity using traditional I/O.
+
+For commandline usage, run the script with ``--help``.
+
+"""
+
 import re
 import sys
 import ensightreader
@@ -8,6 +22,7 @@ import argparse
 
 
 def main() -> int:
+    """Main function of ensight2obj.py"""
     parser = argparse.ArgumentParser()
     parser.add_argument("ensight_case", metavar="*.case", help="input EnSight Gold case (C Binary)")
     parser.add_argument("output_obj", metavar="*.obj", help="output OBJ file (text)")
