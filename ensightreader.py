@@ -292,6 +292,32 @@ class UnstructuredElementBlock:
     element_id_handling: IdHandling
     part_id: int
 
+    def read_element_ids(self, fp: SeekableBufferedReader) -> Optional[Int32NDArray]:
+        """
+        Read element IDs for this element block, if present
+
+        .. note::
+            This method simply returns the element ID array as present
+            in the file; it does not differentiate between ``element id given``
+            and ``element id ignore``, etc.
+
+        Args:
+            fp: opened geometry file object in ``"rb"`` mode
+
+        Returns:
+            1D array of int32 with element IDs, or None if element IDs are not
+            present in the file
+        """
+        if not self.element_id_handling.ids_present:
+            return None
+
+        fp.seek(self.offset)
+
+        assert read_line(fp).startswith(self.element_type.value)
+        assert read_int(fp) == self.number_of_elements
+        arr = read_ints(fp, self.number_of_elements)
+        return arr
+
     def read_connectivity(self, fp: SeekableBufferedReader) -> Int32NDArray:
         """
         Read connectivity (for elements other than NSIDED/NFACED)
@@ -480,6 +506,35 @@ class GeometryPart:
 
         arr = read_floats(fp, 3*self.number_of_nodes)
         return arr.reshape((self.number_of_nodes, 3), order="F")
+
+    def read_node_ids(self, fp: SeekableBufferedReader) -> Optional[Int32NDArray]:
+        """
+        Read node IDs for this part, if present
+
+        .. note::
+            This method simply returns the node ID array as present
+            in the file; it does not differentiate between ``node id given``
+            and ``node id ignore``, etc.
+
+        Args:
+            fp: opened geometry file object in ``"rb"`` mode
+
+        Returns:
+            1D array of int32 with node IDs, or None if node IDs are not
+            present in the file
+        """
+        if not self.node_id_handling.ids_present:
+            return None
+
+        fp.seek(self.offset)
+
+        assert read_line(fp).startswith("part")
+        assert read_int(fp) == self.part_id
+        assert read_line(fp).startswith(self.part_name)
+        assert read_line(fp).startswith("coordinates")
+        assert read_int(fp) == self.number_of_nodes
+        arr = read_ints(fp, self.number_of_nodes)
+        return arr
 
     def is_volume(self) -> bool:
         """Return True if part contains volume elements"""

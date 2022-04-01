@@ -41,12 +41,22 @@ def test_read_sphere_case():
         assert nodes.dtype == NODES_REF.dtype
         assert np.allclose(nodes, NODES_REF)
 
+        node_ids = part.read_node_ids(fp_geo)
+        assert node_ids.shape == NODE_IDS_REF.shape
+        assert node_ids.dtype == NODE_IDS_REF.dtype
+        assert np.equal(node_ids, NODE_IDS_REF).all()
+
         assert len(part.element_blocks) == 1
         block = part.element_blocks[0]
         assert block.element_type == ElementType.TRIA3
         connectivity = block.read_connectivity(fp_geo)
         assert connectivity.shape == (96, 3)
         assert connectivity.dtype == np.int32
+
+        element_ids = block.read_element_ids(fp_geo)
+        assert element_ids.shape == ELEMENT_IDS_REF.shape
+        assert element_ids.dtype == ELEMENT_IDS_REF.dtype
+        assert np.equal(element_ids, ELEMENT_IDS_REF).all()
         # TODO check connectivity
 
     # check variables
@@ -96,12 +106,23 @@ def test_read_sphere_case_mmap():
         assert nodes.dtype == NODES_REF.dtype
         assert np.allclose(nodes, NODES_REF)
 
+        node_ids = part.read_node_ids(mm_geo)
+        assert node_ids.shape == NODE_IDS_REF.shape
+        assert node_ids.dtype == NODE_IDS_REF.dtype
+        assert np.equal(node_ids, NODE_IDS_REF).all()
+
         assert len(part.element_blocks) == 1
         block = part.element_blocks[0]
         assert block.element_type == ElementType.TRIA3
         connectivity = block.read_connectivity(mm_geo)
         assert connectivity.shape == (96, 3)
         assert connectivity.dtype == np.int32
+
+        element_ids = block.read_element_ids(mm_geo)
+        assert element_ids.shape == ELEMENT_IDS_REF.shape
+        assert element_ids.dtype == ELEMENT_IDS_REF.dtype
+        assert np.equal(element_ids, ELEMENT_IDS_REF).all()
+
         # TODO check connectivity
 
     # check variables
@@ -167,6 +188,8 @@ NODES_REF = np.asarray([
 ], dtype=np.float32)
 
 
+NODE_IDS_REF = np.arange(50, dtype=np.int32)
+
 VARIABLE_DATA_REF = np.asarray([
     220.841,
     220.841,
@@ -219,3 +242,5 @@ VARIABLE_DATA_REF = np.asarray([
     213.368,
     232.346,
 ], dtype=np.float32)
+
+ELEMENT_IDS_REF = np.arange(96, dtype=np.int32)
