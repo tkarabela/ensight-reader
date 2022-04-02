@@ -49,7 +49,10 @@ class EnsightReaderError(Exception):
     """
     def __init__(self, msg: str, fp: Optional[Union[TextIO, SeekableBufferedReader]] = None, lineno: Optional[int] = None):
         self.file_path = getattr(fp, "name", None)
-        self.file_offset = fp.tell() if fp else None
+        try:
+            self.file_offset = fp.tell() if fp else None
+        except OSError:
+            self.file_offset = None
         self.file_lineno = lineno
         if lineno is not None:
             message = f"{msg} (path={self.file_path}, line={self.file_lineno})"
@@ -1248,6 +1251,7 @@ class EnsightCaseFile:
             current_timeset: Optional[Timeset] = None
             current_timeset_file_start_number = None
             current_timeset_filename_increment = None
+            last_key = None
 
             for lineno, line in enumerate(fp, 1):
                 line = line.strip()
@@ -1261,6 +1265,7 @@ class EnsightCaseFile:
                 if ":" in line:
                     key, values_ = line.split(":", maxsplit=1)
                     values: List[str] = values_.split()
+                    last_key = key
                 else:
                     key = None
                     values = line.split()
@@ -1344,8 +1349,7 @@ class EnsightCaseFile:
                     elif key == "time values":
                         current_timeset.time_values.extend(map(float, values))  # type: ignore[union-attr]
                     elif key == "filename numbers":
-                        raise EnsightReaderError("Unsupported timeset definition ('filename numbers' is not supported)",
-                                                 fp, lineno)
+                        current_timeset.filename_numbers.extend(map(int, values))  # type: ignore[union-attr]
                     elif key == "filename numbers file":
                         path = op.join(casefile_dir_path, values[0])
                         current_timeset.filename_numbers = read_numbers_from_text_file(path, int)  # type: ignore[union-attr]
@@ -1353,10 +1357,15 @@ class EnsightCaseFile:
                         path = op.join(casefile_dir_path, values[0])
                         current_timeset.time_values = read_numbers_from_text_file(path, float)  # type: ignore[union-attr]
                     elif key is None:
-                        # we expect that this is continuation of 'time values'
-                        current_timeset.time_values.extend(map(float, values))  # type: ignore[union-attr]
+                        if last_key == "time values":
+                            current_timeset.time_values.extend(map(float, values))  # type: ignore[union-attr]
+                        elif last_key == "filename numbers":
+                            current_timeset.filename_numbers.extend(map(int, values))  # type: ignore[union-attr]
+                        else:
+                            print(f"Warning: unsupported time line ({casefile_path}:{lineno}), skipping")
+                            continue
                     else:
-                        print(f"Warning: unsupported variable line ({casefile_path}:{lineno}), skipping")
+                        print(f"Warning: unsupported time line ({casefile_path}:{lineno}), skipping")
                         continue
                 else:
                     print(f"Warning: unsupported section ({casefile_path}:{lineno}), skipping")
