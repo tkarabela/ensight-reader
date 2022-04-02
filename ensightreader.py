@@ -80,6 +80,16 @@ class IdHandling(Enum):
         return self in (self.GIVEN, self.IGNORE)
 
 
+class ChangingGeometry(Enum):
+    """
+    Additional information about transient geometry
+
+    """
+    NO_CHANGE = "no_change"
+    COORD_CHANGE = "coord_change"
+    CONN_CHANGE = "conn_change"
+
+
 class VariableLocation(Enum):
     """
     Location of variable in EnSight Gold case
@@ -478,6 +488,7 @@ class GeometryPart:
         element_blocks: list of element blocks, in order of definition in the file
         node_id_handling: node ID presence
         element_id_handling: element ID presence
+        changing_geometry: type of transient changes (coordinate/connectivity/none)
     """
     offset: int
     part_id: int
@@ -486,6 +497,7 @@ class GeometryPart:
     element_blocks: List[UnstructuredElementBlock]
     node_id_handling: IdHandling
     element_id_handling: IdHandling
+    changing_geometry: Optional[ChangingGeometry] = None
 
     def read_nodes(self, fp: SeekableBufferedReader) -> Float32NDArray:
         """
@@ -557,18 +569,27 @@ class GeometryPart:
         return sum(block.number_of_elements for block in self.element_blocks if block.element_type == element_type)
 
     @classmethod
-    def from_file(cls, fp: SeekableBufferedReader, node_id_handling: IdHandling, element_id_handling: IdHandling) -> "GeometryPart":
-        """Used internally by `EnsightGeometryFile.from_file()`"""
+    def from_file(cls, fp: SeekableBufferedReader, node_id_handling: IdHandling,
+                  element_id_handling: IdHandling, changing_geometry_per_part: bool) -> "GeometryPart":
+        """Used internally by `EnsightGeometryFile.from_file_path()`"""
         offset = fp.tell()
         fp.seek(0, os.SEEK_END)
         file_len = fp.tell()
         fp.seek(offset)
 
         element_blocks = []
+        changing_geometry = None
 
         part_line = read_line(fp)
         if not part_line.startswith("part"):
             raise EnsightReaderError("Expected 'part' line", fp)
+        if changing_geometry_per_part:
+            for changing_geometry_ in ChangingGeometry:
+                if changing_geometry_.value in part_line:
+                    changing_geometry = changing_geometry_
+                    break
+            else:
+                raise EnsightReaderError("Expected no_change/coord_change/conn_change in 'part' line", fp)
         part_id = read_int(fp)
         part_name = read_line(fp).rstrip("\x00 ")
         coordinates_line = read_line(fp)
@@ -602,6 +623,7 @@ class GeometryPart:
                 element_blocks=element_blocks,
                 node_id_handling=node_id_handling,
                 element_id_handling=element_id_handling,
+                changing_geometry=changing_geometry,
             )
 
 
@@ -637,6 +659,10 @@ def read_int(fp: SeekableBufferedReader) -> int:
 
 def read_floats(fp: SeekableBufferedReader, count: int) -> Float32NDArray:
     return read_array(fp, count, np.float32)
+
+
+def read_float(fp: SeekableBufferedReader) -> float:
+    return float(read_floats(fp, 1)[0])
 
 
 def read_string(fp: SeekableBufferedReader, count: int) -> str:
@@ -682,6 +708,7 @@ class EnsightGeometryFile:
         element_id_handling: element ID presence
         extents: optional extents given in header (xmin, xmax, ymin, ymax, zmin, zmax)
         parts: dictonary mapping part IDs to `GeometryPart` objects
+        changing_geometry_per_part: whether parts contain information about type of transient changes
     """
     file_path: str
     description_line1: str
@@ -690,6 +717,7 @@ class EnsightGeometryFile:
     element_id_handling: IdHandling
     extents: Optional[Float32NDArray]
     parts: Dict[int, GeometryPart]  # part ID -> GeometryPart
+    changing_geometry_per_part: bool
 
     def get_part_names(self) -> List[str]:
         """Return list of part names"""
@@ -714,7 +742,7 @@ class EnsightGeometryFile:
         return None
 
     @classmethod
-    def from_file_path(cls, file_path: str) -> "EnsightGeometryFile":
+    def from_file_path(cls, file_path: str, changing_geometry_per_part: bool) -> "EnsightGeometryFile":
         """Parse EnSight Gold geometry file"""
         extents = None
         parts = {}
@@ -758,7 +786,8 @@ class EnsightGeometryFile:
             while fp.tell() != file_len:
                 part = GeometryPart.from_file(fp,
                                               node_id_handling=node_id_handling,
-                                              element_id_handling=element_id_handling)
+                                              element_id_handling=element_id_handling,
+                                              changing_geometry_per_part=changing_geometry_per_part)
                 if part.part_id in parts:
                     raise EnsightReaderError(f"Duplicate part id: {part.part_id}", fp)
                 parts[part.part_id] = part
@@ -771,6 +800,7 @@ class EnsightGeometryFile:
             element_id_handling=element_id_handling,
             extents=extents,
             parts=parts,
+            changing_geometry_per_part=changing_geometry_per_part,
         )
 
 
@@ -792,7 +822,7 @@ class EnsightVariableFile:
 
     .. note::
         - there are some limitations for per-element variable files, see `EnsightVariableFile.read_element_data()`
-        - ``coordinates partial`` and ``coordinates undef`` is not supported
+        - ``coordinates partial`` is not supported
 
     This objects contains metadata parsed from EnSight Gold
     variable file; it does not hold any variable data arrays,
@@ -807,6 +837,12 @@ class EnsightVariableFile:
         part_offsets: dictionary mapping part IDs to offset to 'part' line in file
         part_element_offsets: for per-element variables, this holds a dictionary
             mapping ``(part ID, element type)`` tuples to offset to 'element type' line in file
+        part_per_node_undefined_values: for per-element variables, this holds a dictionary
+            mapping part IDs to value that should be considered as undefined
+            (``coordinates undef``)
+        part_per_element_undefined_values: for per-element variables, this holds a dictionary
+            mapping ``(part ID, element type)`` tuples to value that should be considered as undefined
+            (``element_type undef``)
     """
     file_path: str
     description_line: str
@@ -816,6 +852,8 @@ class EnsightVariableFile:
     part_offsets: Dict[int, int]
     part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]]
     geometry_file: EnsightGeometryFile
+    part_per_node_undefined_values: Optional[Dict[int, float]]
+    part_per_element_undefined_values: Optional[Dict[Tuple[int, ElementType], float]]
 
     def is_defined_for_part_id(self, part_id: int) -> bool:
         """Return True if variable is defined for given part, else False"""
@@ -841,6 +879,7 @@ class EnsightVariableFile:
             based on variable type (vector, tensor).
         """
         part = self.geometry_file.parts[part_id]
+        undefined_value = self.part_per_node_undefined_values.get(part_id)
 
         if not self.variable_location == VariableLocation.PER_NODE:
             raise ValueError("Variable is not per node")
@@ -853,6 +892,8 @@ class EnsightVariableFile:
         assert read_line(fp).startswith("part")
         assert read_int(fp) == part_id
         assert read_line(fp).startswith("coordinates")
+        if undefined_value is not None:
+            assert read_float(fp) == undefined_value
 
         n = part.number_of_nodes
         k = VALUES_FOR_VARIABLE_TYPE[self.variable_type]
@@ -891,6 +932,7 @@ class EnsightVariableFile:
             based on variable type (vector, tensor).
         """
         part = self.geometry_file.parts[part_id]
+        undefined_value = self.part_per_element_undefined_values.get((part_id, element_type))
 
         if not self.variable_location == VariableLocation.PER_ELEMENT:
             raise ValueError("Variable is not per element")
@@ -901,6 +943,8 @@ class EnsightVariableFile:
 
         fp.seek(offset)
         assert read_line(fp).startswith(element_type.value)
+        if undefined_value is not None:
+            assert read_float(fp) == undefined_value
 
         n = part.get_number_of_elements_of_type(element_type)
         k = VALUES_FOR_VARIABLE_TYPE[self.variable_type]
@@ -914,7 +958,16 @@ class EnsightVariableFile:
                        variable_type: VariableType, geofile: EnsightGeometryFile) -> "EnsightVariableFile":
         """Used internally by `EnsightVariableFileSet.get_file()`"""
         part_offsets = {}
-        part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]] = {} if variable_location == VariableLocation.PER_ELEMENT else None
+
+        part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]] = None
+        part_per_node_undefined_values: Optional[Dict[int, float]] = None
+        part_per_element_undefined_values: Optional[Dict[Tuple[int, ElementType], float]] = None
+
+        if variable_location == VariableLocation.PER_ELEMENT:
+            part_element_offsets = {}
+            part_per_element_undefined_values = {}
+        else:
+            part_per_node_undefined_values = {}
 
         with open(file_path, "rb") as fp:
             fp.seek(0, os.SEEK_END)
@@ -945,6 +998,11 @@ class EnsightVariableFile:
                     coordinates_line = read_line(fp)
                     if not coordinates_line.startswith("coordinates"):
                         raise EnsightReaderError(f"Expected 'coordinates' line, got: {coordinates_line!r}", fp)
+                    if "undef" in coordinates_line:
+                        undefined_value = read_float(fp)
+                        part_per_node_undefined_values[part_id] = undefined_value
+                    elif "partial" in coordinates_line:
+                        raise EnsightReaderError(f"'coordinate partial' is not supported (part id {part_id})", fp)
 
                     part_offsets[part_id] = part_offset
 
@@ -965,6 +1023,12 @@ class EnsightVariableFile:
                             element_type = ElementType.parse_from_line(element_type_line)
                         except ValueError as e:
                             raise EnsightReaderError(f"Bad element type", fp) from e
+
+                        if "undef" in element_type_line:
+                            undefined_value = read_float(fp)
+                            part_per_element_undefined_values[part_id, element_type] = undefined_value
+                        elif "partial" in element_type_line:
+                            raise EnsightReaderError(f"'element_type partial' is not supported (part id {part_id})", fp)
 
                         blocks = [block for block in part.element_blocks if block.element_type == element_type]
                         if not blocks:
@@ -996,6 +1060,8 @@ class EnsightVariableFile:
             part_offsets=part_offsets,
             part_element_offsets=part_element_offsets,
             geometry_file=geofile,
+            part_per_node_undefined_values=part_per_node_undefined_values,
+            part_per_element_undefined_values=part_per_element_undefined_values,
         )
 
 
@@ -1014,11 +1080,12 @@ class EnsightGeometryFileSet:
         casefile_dir_path: path to casefile directory (root for relative paths in casefile)
         timeset: time set in which the geometry is defined, or None if it's not transient
         filename: path to the data file(s), including ``*`` wildcards if transient
+        changing_geometry_per_part: whether parts contain information about type of transient changes
     """
     casefile_dir_path: str
     timeset: Optional[Timeset]
     filename: str
-    # change_coords_only: bool = False
+    changing_geometry_per_part: bool = False
 
     def get_file(self, timestep: int = 0) -> EnsightGeometryFile:
         """Return geometry for given timestep (use 0 if not transient)"""
@@ -1028,7 +1095,7 @@ class EnsightGeometryFileSet:
             timestep_filename = fill_wildcard(self.filename, self.timeset.filename_numbers[timestep])
 
         path = op.join(self.casefile_dir_path, timestep_filename)
-        return EnsightGeometryFile.from_file_path(path)
+        return EnsightGeometryFile.from_file_path(path, changing_geometry_per_part=self.changing_geometry_per_part)
 
 
 @dataclass
@@ -1118,6 +1185,8 @@ class EnsightCaseFile:
         - filesets and single-file cases are not supported; only ``C Binary``
           files are supported
         - ``change_coords_only`` is not supported
+        - ``changing_geometry_per_part`` is only read and stored, not handled
+          in reading geometry data
         - some variable types are unsupported, see `VariableType`
         - ghost cells are not supported
         - cases with more than one time set are supported,
@@ -1263,6 +1332,7 @@ class EnsightCaseFile:
             current_timeset: Optional[Timeset] = None
             current_timeset_file_start_number = None
             current_timeset_filename_increment = None
+            changing_geometry_per_part = False
             last_key = None
 
             for lineno, line in enumerate(fp, 1):
@@ -1287,19 +1357,26 @@ class EnsightCaseFile:
                         raise EnsightReaderError("Expected 'ensight gold' in type line", fp, lineno)
                 elif current_section == "GEOMETRY":
                     if key == "model":
-                        if values[-1] == "change_coords_only":
+                        if "change_coords_only" in values:
                             raise EnsightReaderError("Model with 'change_coords_only' is not supported", fp, lineno)
+                        if values[-1] == "changing_geometry_per_part":
+                            changing_geometry_per_part = True
+                            values.pop()
                         if len(values) == 1:
                             filename, = values
-                            geometry_model = EnsightGeometryFileSet(casefile_dir_path,
-                                                                    timeset=None,
-                                                                    filename=filename)
+                            geometry_model = EnsightGeometryFileSet(
+                                casefile_dir_path,
+                                timeset=None,
+                                filename=filename,
+                                changing_geometry_per_part=changing_geometry_per_part)
                         elif len(values) == 2:
                             ts_, filename = values
                             geometry_model_ts = int(ts_)
-                            geometry_model = EnsightGeometryFileSet(casefile_dir_path,
-                                                                    timeset=None,  # timeset will be added later
-                                                                    filename=filename)
+                            geometry_model = EnsightGeometryFileSet(
+                                casefile_dir_path,
+                                timeset=None,  # timeset will be added later
+                                filename=filename,
+                                changing_geometry_per_part=changing_geometry_per_part)
                         else:
                             raise EnsightReaderError("Unsupported model definition (note: fs is not supported)",
                                                      fp, lineno)

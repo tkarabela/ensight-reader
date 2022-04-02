@@ -48,6 +48,8 @@ Enum types
     :members:
 .. autoenum:: IdHandling
     :members:
+.. autoenum:: ChangingGeometry
+    :members:
 
 
 Exceptions
