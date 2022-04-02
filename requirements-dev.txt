@@ -1,4 +1,4 @@
-nose~=1.3
+pytest
 mypy
 
 -r ./docs/requirements.txt
