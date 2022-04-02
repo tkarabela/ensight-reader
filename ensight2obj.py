@@ -16,13 +16,13 @@ For commandline usage, run the script with ``--help``.
 
 import re
 import sys
+from typing import Optional
 import ensightreader
 import numpy as np
 import argparse
 
 
 def main() -> int:
-    """Main function of ensight2obj.py"""
     parser = argparse.ArgumentParser()
     parser.add_argument("ensight_case", metavar="*.case", help="input EnSight Gold case (C Binary)")
     parser.add_argument("output_obj", metavar="*.obj", help="output OBJ file (text)")
@@ -33,6 +33,12 @@ def main() -> int:
     ensight_case_path = args.ensight_case
     output_obj_path = args.output_obj
     part_name_regex = args.only_parts
+
+    return ensight2obj(ensight_case_path, output_obj_path, part_name_regex)
+
+
+def ensight2obj(ensight_case_path: str, output_obj_path: str, part_name_regex: Optional[str] = None) -> int:
+    """Main function of ensight2obj.py"""
 
     print("Reading input EnSight case", ensight_case_path)
     case = ensightreader.read_case(ensight_case_path)

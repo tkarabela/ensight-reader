@@ -1,13 +1,18 @@
 import numpy as np
+import tempfile
 import mmap
+import os.path as op
 from ensightreader import read_case, EnsightGeometryFile, GeometryPart, IdHandling, ElementType
+from ensight2obj import ensight2obj
+from ensight2vtk import ensight2vtk
+
+
+ENSIGHT_CASE_PATH = "./data/sphere/sphere.case"
 
 
 def test_read_sphere_case():
-    path = "./data/sphere/sphere.case"
-
     # check casefile
-    case = read_case(path)
+    case = read_case(ENSIGHT_CASE_PATH)
 
     assert case.get_variables() == ["RTData"]
     assert case.get_node_variables() == ["RTData"]
@@ -40,11 +45,13 @@ def test_read_sphere_case():
         assert nodes.shape == NODES_REF.shape
         assert nodes.dtype == NODES_REF.dtype
         assert np.allclose(nodes, NODES_REF)
+        assert nodes.flags.writeable
 
         node_ids = part.read_node_ids(fp_geo)
         assert node_ids.shape == NODE_IDS_REF.shape
         assert node_ids.dtype == NODE_IDS_REF.dtype
         assert np.equal(node_ids, NODE_IDS_REF).all()
+        assert node_ids.flags.writeable
 
         assert len(part.element_blocks) == 1
         block = part.element_blocks[0]
@@ -52,11 +59,13 @@ def test_read_sphere_case():
         connectivity = block.read_connectivity(fp_geo)
         assert connectivity.shape == (96, 3)
         assert connectivity.dtype == np.int32
+        assert connectivity.flags.writeable
 
         element_ids = block.read_element_ids(fp_geo)
         assert element_ids.shape == ELEMENT_IDS_REF.shape
         assert element_ids.dtype == ELEMENT_IDS_REF.dtype
         assert np.equal(element_ids, ELEMENT_IDS_REF).all()
+        assert element_ids.flags.writeable
         # TODO check connectivity
 
     # check variables
@@ -66,13 +75,12 @@ def test_read_sphere_case():
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)
+        assert variable_data.flags.writeable
 
 
 def test_read_sphere_case_mmap():
-    path = "./data/sphere/sphere.case"
-
     # check casefile
-    case = read_case(path)
+    case = read_case(ENSIGHT_CASE_PATH)
 
     assert case.get_variables() == ["RTData"]
     assert case.get_node_variables() == ["RTData"]
@@ -105,11 +113,13 @@ def test_read_sphere_case_mmap():
         assert nodes.shape == NODES_REF.shape
         assert nodes.dtype == NODES_REF.dtype
         assert np.allclose(nodes, NODES_REF)
+        assert not nodes.flags.writeable
 
         node_ids = part.read_node_ids(mm_geo)
         assert node_ids.shape == NODE_IDS_REF.shape
         assert node_ids.dtype == NODE_IDS_REF.dtype
         assert np.equal(node_ids, NODE_IDS_REF).all()
+        assert not nodes.flags.writeable
 
         assert len(part.element_blocks) == 1
         block = part.element_blocks[0]
@@ -117,11 +127,13 @@ def test_read_sphere_case_mmap():
         connectivity = block.read_connectivity(mm_geo)
         assert connectivity.shape == (96, 3)
         assert connectivity.dtype == np.int32
+        assert not connectivity.flags.writeable
 
         element_ids = block.read_element_ids(mm_geo)
         assert element_ids.shape == ELEMENT_IDS_REF.shape
         assert element_ids.dtype == ELEMENT_IDS_REF.dtype
         assert np.equal(element_ids, ELEMENT_IDS_REF).all()
+        assert not element_ids.flags.writeable
 
         # TODO check connectivity
 
@@ -132,6 +144,25 @@ def test_read_sphere_case_mmap():
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)
+        assert not variable_data.flags.writeable
+
+
+def test_sphere_case_ensight2obj():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # TODO check output file
+        assert 0 == ensight2obj(
+            ensight_case_path=ENSIGHT_CASE_PATH,
+            output_obj_path=op.join(temp_dir, "sphere.obj")
+        )
+
+
+def test_sphere_case_ensight2vtk():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # TODO check output file
+        assert 0 == ensight2vtk(
+            ensight_case_path=ENSIGHT_CASE_PATH,
+            output_vtk_path_given=op.join(temp_dir, "sphere.vtk")
+        )
 
 
 NODES_REF = np.asarray([

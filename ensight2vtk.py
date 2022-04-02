@@ -18,13 +18,13 @@ For commandline usage, run the script with ``--help``.
 import mmap
 import re
 import sys
+from typing import Optional
 from ensightreader import read_case, EnsightCaseFile, ElementType, VariableType
 import argparse
 import os.path as op
 
 
 def main() -> int:
-    """Main function of ensight2vtk.py"""
     parser = argparse.ArgumentParser()
     parser.add_argument("ensight_case", metavar="*.case", help="input EnSight Gold case (C Binary)")
     parser.add_argument("output_vtk", metavar="*.vtk", help="output VTK file (text)")
@@ -36,6 +36,11 @@ def main() -> int:
     output_vtk_path_given = args.output_vtk
     part_name_regex = args.only_parts
 
+    return ensight2vtk(ensight_case_path, output_vtk_path_given, part_name_regex)
+
+
+def ensight2vtk(ensight_case_path: str, output_vtk_path_given: str, part_name_regex: Optional[str] = None) -> int:
+    """Main function of ensight2vtk.py"""
     output_vtk_prefix, _ = op.splitext(output_vtk_path_given)
 
     print("Reading input EnSight case", ensight_case_path)

@@ -1,13 +1,18 @@
 import numpy as np
+import tempfile
+import os.path as op
+from ensight2obj import ensight2obj
+from ensight2vtk import ensight2vtk
 from ensightreader import read_case, EnsightGeometryFile, GeometryPart, IdHandling, ElementType, VariableLocation, \
     VariableType
 
 
-def test_read_cavity_case():
-    path = "./data/cavity/cavity.case"
+ENSIGHT_CASE_PATH = "./data/cavity/cavity.case"
 
+
+def test_read_cavity_case():
     # check casefile
-    case = read_case(path)
+    case = read_case(ENSIGHT_CASE_PATH)
     VARIABLE_NAMES = ["U", "p"]
     TIME_VALUES = [0.00000e+00, 1.00000e-01, 2.00000e-01, 3.00000e-01, 4.00000e-01, 5.00000e-01]
     TIMESTEPS = list(range(len(TIME_VALUES)))
@@ -82,3 +87,21 @@ def test_read_cavity_case():
                     for block in part.element_blocks:
                         variable_data = variable.read_element_data(fp_var, part.part_id, block.element_type)
                         assert variable_data.shape[0] == block.number_of_elements
+
+
+def test_cavity_case_ensight2obj():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # TODO check output file
+        assert 0 == ensight2obj(
+            ensight_case_path=ENSIGHT_CASE_PATH,
+            output_obj_path=op.join(temp_dir, "cavity.obj")
+        )
+
+
+def test_cavity_case_ensight2vtk():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # TODO check output file
+        assert 0 == ensight2vtk(
+            ensight_case_path=ENSIGHT_CASE_PATH,
+            output_vtk_path_given=op.join(temp_dir, "cavity.vtk")
+        )
