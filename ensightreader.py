@@ -606,13 +606,25 @@ class GeometryPart:
 
 
 def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -> np.ndarray:
-    bytes_to_read = count * dtype().itemsize
-    buffer = fp.read(bytes_to_read)
-    if len(buffer) != bytes_to_read:
-        raise EnsightReaderError(f"Only read {len(buffer)} bytes, expected {bytes_to_read} bytes", fp)
+    if isinstance(fp, mmap.mmap):
+        # for memory-mapped access, we want to wrap `bytes` as returned from the mmap;
+        # this results in non-writeable `ndarray`
+        bytes_to_read = count * dtype().itemsize
+        buffer = fp.read(bytes_to_read)
+        if len(buffer) != bytes_to_read:
+            raise EnsightReaderError(f"Only read {len(buffer)} bytes, expected {bytes_to_read} bytes", fp)
 
-    arr = np.frombuffer(buffer, dtype=dtype)
-    return arr
+        arr = np.frombuffer(buffer, dtype=dtype)
+        return arr
+    else:
+        # for regular file access, we allocate buffer first and then read into it,
+        # this results in writeable `ndarray`
+        arr = np.empty((count,), dtype=dtype)
+        bytes_to_read = arr.data.nbytes
+        n = fp.readinto(arr.data)
+        if n != bytes_to_read:
+            raise EnsightReaderError(f"Only read {n} bytes, expected {bytes_to_read} bytes", fp)
+        return arr
 
 
 def read_ints(fp: SeekableBufferedReader, count: int) -> Int32NDArray:
