@@ -786,6 +786,7 @@ class EnsightVariableFile:
     Attributes:
         file_path: path to the actual variable file (no wildcards)
         description_line: line in header
+        variable_name: name of the variable in case file
         variable_location: where the variable is defined (elements or nodes)
         variable_type: type of the variable (scalar, ...)
         part_offsets: dictionary mapping part IDs to offset to 'part' line in file
@@ -794,6 +795,7 @@ class EnsightVariableFile:
     """
     file_path: str
     description_line: str
+    variable_name: str
     variable_location: VariableLocation
     variable_type: VariableType
     part_offsets: Dict[int, int]
@@ -893,8 +895,8 @@ class EnsightVariableFile:
         return arr
 
     @classmethod
-    def from_file_path(cls, file_path: str, variable_location: VariableLocation, variable_type: VariableType,
-                       geofile: EnsightGeometryFile) -> "EnsightVariableFile":
+    def from_file_path(cls, file_path: str, variable_name: str, variable_location: VariableLocation,
+                       variable_type: VariableType, geofile: EnsightGeometryFile) -> "EnsightVariableFile":
         """Used internally by `EnsightVariableFileSet.get_file()`"""
         part_offsets = {}
         part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]] = {} if variable_location == VariableLocation.PER_ELEMENT else None
@@ -973,6 +975,7 @@ class EnsightVariableFile:
         return cls(
             file_path=file_path,
             description_line=description_line,
+            variable_name=variable_name,
             variable_location=variable_location,
             variable_type=variable_type,
             part_offsets=part_offsets,
@@ -1056,7 +1059,8 @@ class EnsightVariableFileSet:
             timestep_filename = fill_wildcard(self.filename, self.timeset.filename_numbers[timestep])
 
         path = op.join(self.casefile_dir_path, timestep_filename)
-        return EnsightVariableFile.from_file_path(path, variable_location=self.variable_location,
+        return EnsightVariableFile.from_file_path(path, variable_name=self.variable_name,
+                                                  variable_location=self.variable_location,
                                                   variable_type=self.variable_type, geofile=geofile)
 
 
