@@ -725,7 +725,7 @@ class EnsightGeometryFile:
             fp.seek(0)
 
             first_line = read_line(fp)
-            if not first_line.startswith("C Binary"):
+            if not first_line.lower().startswith("c binary"):
                 raise EnsightReaderError("Only 'C Binary' files are supported", fp)
 
             description_line1 = read_line(fp)
