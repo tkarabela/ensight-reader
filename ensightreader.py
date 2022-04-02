@@ -621,7 +621,7 @@ def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -
         # this results in writeable `ndarray`
         arr = np.empty((count,), dtype=dtype)
         bytes_to_read = arr.data.nbytes
-        n = fp.readinto(arr.data)
+        n = fp.readinto(arr.data)  # type: ignore[attr-defined]
         if n != bytes_to_read:
             raise EnsightReaderError(f"Only read {n} bytes, expected {bytes_to_read} bytes", fp)
         return arr

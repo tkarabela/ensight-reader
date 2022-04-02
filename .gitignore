@@ -3,3 +3,4 @@ temp/
 venv/
 *.py[co]
 .mypy_cache/
+.pytest_cache/
