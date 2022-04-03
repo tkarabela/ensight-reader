@@ -4,3 +4,5 @@ venv/
 *.py[co]
 .mypy_cache/
 .pytest_cache/
+dist/
+ensight_reader.egg-info/
