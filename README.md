@@ -15,6 +15,12 @@ from the VTK library.
 - Python 3.7+
 - NumPy
 
+### Installation
+
+```sh
+pip install ensight-reader
+```
+
 ### Example
 
 ```python
@@ -30,3 +36,5 @@ N = part.number_of_nodes
 with open(geofile.file_path, "rb") as fp_geo:
   node_coordinates = part.read_coordinates(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
 ```
+
+To learn more, please [see the documentation](https://ensight-reader.readthedocs.io).
