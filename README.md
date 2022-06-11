@@ -1,3 +1,8 @@
+![PyPI - Version](https://img.shields.io/pypi/v/ensight-reader.svg?style=flat-square)
+![PyPI - Status](https://img.shields.io/pypi/status/ensight-reader.svg?style=flat-square)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ensight-reader.svg?style=flat-square)
+![License](https://img.shields.io/pypi/l/ensight-reader.svg?style=flat-square)
+
 # ensight-reader
 
 This library provides a pure Python reader for the EnSight Gold data format,
