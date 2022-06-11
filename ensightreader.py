@@ -40,7 +40,7 @@ class EnsightReaderError(Exception):
     Error raised when parsing EnSight Gold binary files
 
     Attributes:
-        file_path (str): path to file where thr error was encountered
+        file_path (str): path to file where the error was encountered
         file_offset (int): approximate seek position of the error (this may be a bit past the place where
             the error is - it's the seek position when this exception was raised)
         file_lineno (int): line number of the error (this only applies to errors in ``*.case`` file,
