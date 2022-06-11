@@ -27,7 +27,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
     - name: Typecheck with mypy
-        run: |
+      run: |
           mypy
     - name: Test with pytest
       run: |
