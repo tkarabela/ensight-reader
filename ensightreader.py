@@ -850,10 +850,10 @@ class EnsightVariableFile:
     variable_location: VariableLocation
     variable_type: VariableType
     part_offsets: Dict[int, int]
-    part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]]
+    part_element_offsets: Dict[Tuple[int, ElementType], int]
     geometry_file: EnsightGeometryFile
-    part_per_node_undefined_values: Optional[Dict[int, float]]
-    part_per_element_undefined_values: Optional[Dict[Tuple[int, ElementType], float]]
+    part_per_node_undefined_values: Dict[int, float]
+    part_per_element_undefined_values: Dict[Tuple[int, ElementType], float]
 
     def is_defined_for_part_id(self, part_id: int) -> bool:
         """Return True if variable is defined for given part, else False"""
@@ -937,7 +937,7 @@ class EnsightVariableFile:
         if not self.variable_location == VariableLocation.PER_ELEMENT:
             raise ValueError("Variable is not per element")
 
-        offset = self.part_element_offsets.get((part_id, element_type))  # type: ignore[union-attr]
+        offset = self.part_element_offsets.get((part_id, element_type))
         if offset is None:
             return None
 
@@ -959,15 +959,9 @@ class EnsightVariableFile:
         """Used internally by `EnsightVariableFileSet.get_file()`"""
         part_offsets = {}
 
-        part_element_offsets: Optional[Dict[Tuple[int, ElementType], int]] = None
-        part_per_node_undefined_values: Optional[Dict[int, float]] = None
-        part_per_element_undefined_values: Optional[Dict[Tuple[int, ElementType], float]] = None
-
-        if variable_location == VariableLocation.PER_ELEMENT:
-            part_element_offsets = {}
-            part_per_element_undefined_values = {}
-        else:
-            part_per_node_undefined_values = {}
+        part_element_offsets: Dict[Tuple[int, ElementType], int] = {}
+        part_per_node_undefined_values: Dict[int, float] = {}
+        part_per_element_undefined_values: Dict[Tuple[int, ElementType], float] = {}
 
         with open(file_path, "rb") as fp:
             fp.seek(0, os.SEEK_END)
@@ -1042,7 +1036,7 @@ class EnsightVariableFile:
                                                      f"(handling of this is not implemented, please have only one block "
                                                      f"of each type)", fp)
 
-                        part_element_offsets[part_id, element_type] = part_element_offset  # type: ignore[index]
+                        part_element_offsets[part_id, element_type] = part_element_offset
 
                         # skip data
                         n = blocks[0].number_of_elements
