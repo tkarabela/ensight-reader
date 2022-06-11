@@ -60,7 +60,7 @@ such as **VTK**.
 
 **VTK specifics**
 
-- supports some features that ensight-reader currently does not (eg. structured arrays)
+- supports some features that ensight-reader currently does not (eg. structured parts)
 - has more high-level API, can do much more with the data (eg. interpolate node/element data, save to different formats, show in 3D viewport, ...)
 - does not support partial reading of parts
 - does not support memory-mapped access

@@ -837,7 +837,7 @@ class EnsightVariableFile:
         part_offsets: dictionary mapping part IDs to offset to 'part' line in file
         part_element_offsets: for per-element variables, this holds a dictionary
             mapping ``(part ID, element type)`` tuples to offset to 'element type' line in file
-        part_per_node_undefined_values: for per-element variables, this holds a dictionary
+        part_per_node_undefined_values: for per-node variables, this holds a dictionary
             mapping part IDs to value that should be considered as undefined
             (``coordinates undef``)
         part_per_element_undefined_values: for per-element variables, this holds a dictionary
@@ -1002,7 +1002,7 @@ class EnsightVariableFile:
                         undefined_value = read_float(fp)
                         part_per_node_undefined_values[part_id] = undefined_value
                     elif "partial" in coordinates_line:
-                        raise EnsightReaderError(f"'coordinate partial' is not supported (part id {part_id})", fp)
+                        raise EnsightReaderError(f"'coordinates partial' is not supported (part id {part_id})", fp)
 
                     part_offsets[part_id] = part_offset
 
