@@ -1,11 +1,12 @@
-import numpy as np
-import tempfile
 import mmap
 import os.path as op
-from ensightreader import read_case, EnsightGeometryFile, GeometryPart, IdHandling, ElementType
+import tempfile
+
+import numpy as np
+
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-
+from ensightreader import ElementType, EnsightGeometryFile, GeometryPart, IdHandling, read_case
 
 ENSIGHT_CASE_PATH = "./data/sphere/sphere.case"
 
