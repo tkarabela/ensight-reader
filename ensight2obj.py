@@ -14,12 +14,14 @@ For commandline usage, run the script with ``--help``.
 
 """
 
+import argparse
 import re
 import sys
 from typing import Optional
-import ensightreader
+
 import numpy as np
-import argparse
+
+import ensightreader
 
 
 def main() -> int:
