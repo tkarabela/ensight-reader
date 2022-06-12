@@ -1,11 +1,12 @@
-import numpy as np
-import tempfile
 import os.path as op
+import tempfile
+
+import numpy as np
+
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-from ensightreader import read_case, EnsightGeometryFile, GeometryPart, IdHandling, ElementType, VariableLocation, \
-    VariableType
-
+from ensightreader import (ElementType, EnsightGeometryFile, GeometryPart, IdHandling,
+                           VariableLocation, VariableType, read_case)
 
 ENSIGHT_CASE_PATH = "./data/cavity/cavity.case"
 
