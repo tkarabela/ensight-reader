@@ -1,4 +1,5 @@
 pytest
 mypy
+isort
 
 -r ./docs/requirements.txt
