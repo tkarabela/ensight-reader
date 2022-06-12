@@ -15,13 +15,14 @@ For commandline usage, run the script with ``--help``.
 
 """
 
+import argparse
 import mmap
+import os.path as op
 import re
 import sys
 from typing import Optional
-from ensightreader import read_case, EnsightCaseFile, ElementType, VariableType
-import argparse
-import os.path as op
+
+from ensightreader import ElementType, EnsightCaseFile, VariableType, read_case
 
 
 def main() -> int:

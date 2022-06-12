@@ -19,15 +19,15 @@
 # THE SOFTWARE.
 
 
-import os
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Union, Type, TypeVar, BinaryIO, TextIO
-import numpy as np
-import re
-import os.path as op
 import mmap
+import os
+import os.path as op
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import BinaryIO, Dict, List, Optional, TextIO, Tuple, Type, TypeVar, Union
 
+import numpy as np
 
 T = TypeVar('T')
 SeekableBufferedReader = Union[BinaryIO, mmap.mmap]
