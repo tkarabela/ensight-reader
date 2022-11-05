@@ -28,11 +28,12 @@ from enum import Enum
 from typing import BinaryIO, Dict, List, Optional, TextIO, Tuple, Type, TypeVar, Union
 
 import numpy as np
+import numpy.typing as npt
 
 T = TypeVar('T')
 SeekableBufferedReader = Union[BinaryIO, mmap.mmap]
-Float32NDArray = np.ndarray  # TODO upgrade to npt.NDArray[np.float32]
-Int32NDArray = np.ndarray  # TODO upgrade to npt.NDArray[np.int32]
+Float32NDArray = npt.NDArray[np.float32]
+Int32NDArray = npt.NDArray[np.int32]
 
 
 class EnsightReaderError(Exception):
