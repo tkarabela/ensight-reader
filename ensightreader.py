@@ -19,19 +19,20 @@
 # THE SOFTWARE.
 
 
-import mmap
+import mmap as _mmap
 import os
 import os.path as op
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import BinaryIO, Dict, List, Optional, TextIO, Tuple, Type, TypeVar, Union
+from typing import BinaryIO, Dict, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Generator
 
 import numpy as np
 import numpy.typing as npt
 
 T = TypeVar('T')
-SeekableBufferedReader = Union[BinaryIO, mmap.mmap]
+SeekableBufferedReader = Union[BinaryIO, _mmap.mmap]
 Float32NDArray = npt.NDArray[np.float32]
 Int32NDArray = npt.NDArray[np.int32]
 
@@ -629,19 +630,28 @@ class GeometryPart:
 
 
 def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -> np.ndarray:
-    if isinstance(fp, mmap.mmap):
-        # for memory-mapped access, we want to wrap `bytes` as returned from the mmap;
-        # this results in non-writeable `ndarray`
+    if isinstance(fp, _mmap.mmap):
+        offset = fp.tell()
         bytes_to_read = count * dtype().itemsize
         buffer = fp.read(bytes_to_read)
         if len(buffer) != bytes_to_read:
             raise EnsightReaderError(f"Only read {len(buffer)} bytes, expected {bytes_to_read} bytes", fp)
 
-        arr = np.frombuffer(buffer, dtype=dtype)
-        return arr
+        # TODO figure out a sane way to ask `mmap.mmap` about its access mode
+        if "ACCESS_WRITE" in str(fp):
+            # For write-through memory-mapped access, simply create an `ndarray` backed by the
+            # mmap, which results in writable `ndarray`; the `fp.read()` call is only used to advance
+            # the file pointer in this case.
+            arr: np.ndarray = np.ndarray((count,), dtype=dtype, buffer=fp, offset=offset)
+            return arr
+        else:
+            # For read-only memory-mapped access, we want to wrap `bytes` as returned from the mmap;
+            # this results in non-writeable `ndarray`.
+            arr = np.frombuffer(buffer, dtype=dtype)
+            return arr
     else:
-        # for regular file access, we allocate buffer first and then read into it,
-        # this results in writeable `ndarray`
+        # For regular file access, we allocate buffer first and then read into it,
+        # this results in writeable `ndarray`.
         arr = np.empty((count,), dtype=dtype)
         bytes_to_read = arr.data.nbytes
         n = fp.readinto(arr.data)  # type: ignore[attr-defined]
@@ -803,6 +813,80 @@ class EnsightGeometryFile:
             parts=parts,
             changing_geometry_per_part=changing_geometry_per_part,
         )
+
+    def open(self) -> BinaryIO:
+        """
+        Return the opened file in read-only binary mode (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to `GeometryPart` methods.
+
+        Note:
+            This is a simpler alternative to the similar ``mmap()`` method - it doesn't
+            require you to reason about lifetime of the opened file since you will be
+            getting arrays which own their data (as opposed to views into the memory-mapped file).
+
+        Usage::
+
+            with geometry_file.open() as fp_geo:
+                nodes = part.read_nodes(fp_geo)
+
+        Equivalent code::
+
+            with open(geometry_file.file_path, "rb") as fp_geo:
+                nodes = part.read_nodes(fp_geo)
+        """
+        return open(self.file_path, "rb")
+
+    @contextmanager
+    def mmap(self) -> Generator[_mmap.mmap, None, None]:
+        """
+        Return read-only memorymap of the file (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to `GeometryPart` methods.
+
+        Note:
+            This is preferred over the similar ``open()`` method if you don't need a copy of the data
+            since the returned arrays will be backed by the memorymap. Be careful to keep the memorymap
+            around as long as you need the arrays.
+
+        Usage::
+
+            with geometry_file.mmap() as fp_geo:
+                nodes = part.read_nodes(fp_geo)
+
+        Equivalent code::
+
+            with open(geometry_file.file_path, "rb") as fp_geo, _mmap.mmap(fp_geo.fileno(), 0, access=mmap.ACCESS_READ) as mm_geo:
+                nodes = part.read_nodes(mm_geo)
+        """
+        with open(self.file_path, "rb") as fp, _mmap.mmap(fp.fileno(), 0, access=_mmap.ACCESS_READ) as mm:
+            yield mm
+
+    @contextmanager
+    def mmap_writable(self) -> Generator[_mmap.mmap, None, None]:
+        """
+        Return writable memorymap of the file (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to `GeometryPart` methods.
+
+        Note:
+            This special version of the ``mmap()`` method can be used if you wish
+            to modify the underlying file. Use carefully.
+
+        Usage::
+
+            with geometry_file.mmap_writable() as fp_geo:
+                nodes = part.read_nodes(fp_geo)
+                nodes[:, 0] = 0.0  # set first coordinate to zero for part nodes
+
+        Equivalent code::
+
+            with open(geometry_file.file_path, "r+b") as fp_geo, _mmap.mmap(fp_geo.fileno(), 0, access=mmap.ACCESS_WRITE) as mm_geo:
+                nodes = part.read_nodes(mm_geo)
+                nodes[:, 0] = 0.0  # set X coordinate to zero for part nodes
+        """
+        with open(self.file_path, "r+b") as fp, _mmap.mmap(fp.fileno(), 0, access=_mmap.ACCESS_WRITE) as mm:
+            yield mm
 
 
 @dataclass
@@ -1058,6 +1142,94 @@ class EnsightVariableFile:
             part_per_node_undefined_values=part_per_node_undefined_values,
             part_per_element_undefined_values=part_per_element_undefined_values,
         )
+
+    def open(self) -> BinaryIO:
+        """
+        Return the opened file in read-only binary mode (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to ``read_node_data()`` and
+        ``read_element_data()`` methods.
+
+        Note:
+            This is a simpler alternative to the similar ``mmap()`` method - it doesn't
+            require you to reason about lifetime of the opened file since you will be
+            getting arrays which own their data (as opposed to views into the memory-mapped file).
+
+        Usage::
+
+            with variable_file.open() as fp_var:
+                variable_data = variable.read_node_data(fp_var, part.part_id)
+
+        Equivalent code::
+
+            with open(variable_file.file_path, "rb") as fp_var:
+                variable_data = variable.read_node_data(fp_var, part.part_id)
+        """
+        return open(self.file_path, "rb")
+
+    @contextmanager
+    def mmap(self) -> Generator[_mmap.mmap, None, None]:
+        """
+        Return read-only memorymap of the file (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to ``read_node_data()`` and
+        ``read_element_data()`` methods.
+
+        Note:
+            This is preferred over the similar ``open()`` method if you don't need a copy of the data
+            since the returned arrays will be backed by the memorymap. Be careful to keep the memorymap
+            around as long as you need the arrays.
+
+        Usage::
+
+            with variable_file.mmap() as mm_var:
+                variable_data = variable.read_node_data(mm_var, part.part_id)
+
+        Equivalent code::
+
+            with open(variable_file.file_path, "rb") as fp_var, _mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_READ) as mm_var:
+                variable_data = variable.read_node_data(mm_var, part.part_id)
+        """
+        with open(self.file_path, "rb") as fp, _mmap.mmap(fp.fileno(), 0, access=_mmap.ACCESS_READ) as mm:
+            yield mm
+
+    @contextmanager
+    def mmap_writable(self) -> Generator[_mmap.mmap, None, None]:
+        """
+        Return writable memorymap of the file (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to ``read_node_data()`` and
+        ``read_element_data()`` methods.
+
+        Note:
+            This special version of the ``mmap()`` method can be used if you wish
+            to modify the underlying file. Use carefully.
+
+        Usage::
+
+            with geometry_file.mmap_writable() as fp_geo:
+                nodes = part.read_nodes(fp_geo)
+                nodes[:, 0] = 0.0  # set X coordinate to zero for part nodes
+
+        Equivalent code::
+
+            with open(geometry_file.file_path, "r+b") as fp_geo, _mmap.mmap(fp_geo.fileno(), 0, access=mmap.ACCESS_WRITE) as mm_geo:
+                nodes = part.read_nodes(mm_geo)
+
+        Usage::
+
+            with variable_file.mmap_writable() as mm_var:
+                variable_data = variable.read_node_data(mm_var, part.part_id)
+                variable_data[:] = np.sqrt(variable_data)  # apply square root function to the data
+
+        Equivalent code::
+
+            with open(variable_file.file_path, "r+b") as fp_var, _mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_WRITE) as mm_var:
+                variable_data = variable.read_node_data(mm_var, part.part_id)
+                variable_data[:] = np.sqrt(variable_data)  # apply square root function to the data
+        """
+        with open(self.file_path, "r+b") as fp, _mmap.mmap(fp.fileno(), 0, access=_mmap.ACCESS_WRITE) as mm:
+            yield mm
 
 
 def fill_wildcard(filename: str, value: int) -> str:

@@ -59,7 +59,7 @@ def ensight2obj(ensight_case_path: str, output_obj_path: str, part_name_regex: O
     print("Reading nodes...")
     node_arrays = []
 
-    with open(geofile.file_path, "rb") as fp_geo:
+    with geofile.open() as fp_geo:
         for part in parts:
             node_array = part.read_nodes(fp_geo)
             node_arrays.append(node_array)
@@ -74,7 +74,7 @@ def ensight2obj(ensight_case_path: str, output_obj_path: str, part_name_regex: O
     # To accommodate this, we need to increment the IDs for subsequent EnSight parts.
     node_id_offset = 0
 
-    with open(output_obj_path, "w") as fp_obj, open(geofile.file_path, "rb") as fp_geo:
+    with open(output_obj_path, "w") as fp_obj, geofile.open() as fp_geo:
         print(f"Writing {number_of_nodes} nodes...", flush=True)
         for i in range(number_of_nodes):
             print("v", *all_nodes[i], file=fp_obj)

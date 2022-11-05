@@ -1,25 +1,11 @@
 Library design & HOWTO
 ======================
 
-Code examples
--------------
-
-The library comes with scripts that use it to convert EnSight Gold into
-other data formats. These are mostly useful for reference as they
-output data in text format, making them unsuitable for production use
-with large models.
-
-.. automodule:: ensight2obj
-    :members:
-
-.. automodule:: ensight2vtk
-    :members:
-
 Memory and file management
 --------------------------
 
 The library is designed to give you control over memory and file management:
-you have to open the data files yourself and pass these opened files to the
+you have to explicitly open the data files and pass these opened files to the
 library to get back NumPy arrays with the data. This adds some bookkeeping
 overhead for you, but it enables you to choose between:
 
@@ -27,14 +13,40 @@ overhead for you, but it enables you to choose between:
   2. memory-mapped I/O and getting arrays that are views into
      the binary EnSight files on disk.
 
-Depending on your use-case, using **memory-mapped I/O** can be very
-efficient.
+Depending on your use-case, using **memory-mapped I/O** can be **very
+efficient**. It also allows for **limited editing of EnSight files**
+(eg. transforming coordinates or variable values in-place).
+
+The following code example demonstrates this feature:
+
+::
+
+    import ensightreader
+
+    case = ensightreader.read_case("data/sphere/sphere.case")
+    geofile = case.get_geometry_model()
+    part_ids = geofile.get_part_ids()
+    part = geofile.get_part_by_id(part_ids[0])
+
+    # (1) traditional I/O
+    with geofile.open() as fp_geo:
+        nodes = part.read_nodes(fp_geo)  # owned buffer
+
+    # (2.1) read-only memory-mapped I/O
+    with geofile.mmap() as mm_geo:
+        nodes = part.read_nodes(mm_geo)  # buffer backed by read-only mmap
+
+    # (2.2) write-through memory-mapped I/O
+    with geofile.mmap_writable() as mm_geo:
+        nodes = part.read_nodes(mm_geo)  # buffer backed by write-through mmap
+        nodes[:, 0] = 0.0                # set X coordinate to zero for part nodes
 
 .. seealso::
-    The ``ensight2vtk.py`` script for example how to use memory-mapped I/O
-    with the library. Simply pass ``mmap`` objects wherever the library
-    expects opened file objects. Make sure to keep the ``mmap`` objects
-    opened for as long as you need the arrays that are read from them.
+    The ``ensight_transform.py`` and ``ensight2vtk.py`` scripts for examples
+    how to use memory-mapped I/O with the library. It's done by simply passing
+    ``mmap`` objects wherever the library expects opened files.
+    Make sure to keep the ``mmap`` objects opened for as long as you need
+    the arrays that are read from them!
 
 Comparison with VTK library
 ---------------------------
@@ -112,14 +124,14 @@ Code example
     >>> part_ids = geofile.get_part_ids()
     >>> part = geofile.get_part_by_id(part_ids[0])
 
-    >>> with open(geofile.file_path, "rb") as fp_geo:
+    >>> with geofile.open() as fp_geo:
     ...     nodes = part.read_nodes(fp_geo)
     >>> nodes
     array([[ 0.0000000e+00,  0.0000000e+00,  5.0000000e+00],
            ...
            [ 1.5340106e+00, -1.5340106e+00, -4.5048442e+00]], dtype=float32)
 
-    >>> with open(geofile.file_path, "rb") as fp_geo:
+    >>> with geofile.open() as fp_geo:
     ...     block = part.element_blocks[0]
     ...     connectivity = block.read_connectivity(fp_geo)
     >>> connectivity
@@ -128,9 +140,26 @@ Code example
            [49,  8,  7]])
 
     >>> variable = case.get_variable("RTData")
-    >>> with open(variable.file_path, "rb") as fp_var:
+    >>> with variable.open() as fp_var:
     ...     variable_data = variable.read_node_data(fp_var, part.part_id)
     >>> variable_data
     array([220.84135, 220.84135, 223.80856, 233.50835, 217.5993 , 217.5993 ,
            ...
            213.36838, 232.34589], dtype=float32)
+
+Code examples
+-------------
+
+The library comes with scripts that use it to convert EnSight Gold into
+other data formats. These are mostly useful for reference as they
+output data in text format, making them unsuitable for production use
+with large models.
+
+.. automodule:: ensight2obj
+    :members:
+
+.. automodule:: ensight2vtk
+    :members:
+
+.. automodule:: ensight_transform
+    :members:

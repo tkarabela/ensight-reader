@@ -1,11 +1,9 @@
 import os.path as op
 import tempfile
 
-import numpy as np
-
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-from ensightreader import (ElementType, EnsightGeometryFile, GeometryPart, IdHandling,
+from ensightreader import (ElementType, EnsightGeometryFile, IdHandling,
                            VariableLocation, VariableType, read_case)
 
 ENSIGHT_CASE_PATH = "./data/cavity/cavity.case"
@@ -62,7 +60,7 @@ def test_read_cavity_case():
     assert part_movingWall.element_blocks[0].element_type == ElementType.QUAD4
     assert part_fixedWalls.element_blocks[0].element_type == ElementType.QUAD4
 
-    with open(geofile.file_path, "rb") as fp_geo:
+    with geofile.open() as fp_geo:
         # TODO check node and connectivity values
         for part in parts:
             nodes = part.read_nodes(fp_geo)
@@ -82,7 +80,7 @@ def test_read_cavity_case():
             variable = case.get_variable(variable_name, timestep)
             assert variable.variable_location == VariableLocation.PER_ELEMENT
 
-            with open(variable.file_path, "rb") as fp_var:
+            with variable.open() as fp_var:
                 # TODO check variable values
                 for part in parts:
                     for block in part.element_blocks:

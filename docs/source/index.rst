@@ -8,6 +8,8 @@ ensight-reader
 
 This library provides a pure Python reader for the EnSight Gold data format,
 a common format for results of computational fluid dynamics (CFD) simulations.
+It also comes with a few CLI tools, notably ``ensight_transform`` which
+allows you to perform in-place scaling/translation/etc. of the geometry in your case.
 
 It's designed for efficient, selective, memory-mapped access to data from EnSight Gold case --
 something that would be useful when importing the data into other systems.
@@ -19,6 +21,7 @@ from the VTK library. For more information, see :ref:`Comparison with VTK librar
 ::
 
    import ensightreader
+   import numpy as np
 
    case = ensightreader.read_case("example.case")
    geofile = case.get_geometry_model()
@@ -27,8 +30,14 @@ from the VTK library. For more information, see :ref:`Comparison with VTK librar
    part = geofile.get_part_by_name(part_names[0])
    N = part.number_of_nodes
 
-   with open(geofile.file_path, "rb") as fp_geo:
-      node_coordinates = part.read_coordinates(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
+   with geofile.open() as fp_geo:
+       node_coordinates = part.read_coordinates(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
+
+   variable = case.get_variable("UMean")
+
+   with variable.mmap_writable() as mm_var:
+       data = variable.read_node_data(mm_var, part.part_id)
+       data[:] = np.sqrt(data)                           # transform variable data in-place
 
 .. toctree::
    :maxdepth: 2
@@ -36,6 +45,7 @@ from the VTK library. For more information, see :ref:`Comparison with VTK librar
 
    design-howto
    api-reference
+   ensight-transform-cli
 
 License
 -------

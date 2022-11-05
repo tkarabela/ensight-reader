@@ -1,14 +1,16 @@
-import mmap
 import os.path as op
 import tempfile
+import shutil
 
 import numpy as np
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
+from ensight_transform import ensight_transform
 from ensightreader import ElementType, EnsightGeometryFile, GeometryPart, IdHandling, read_case
 
-ENSIGHT_CASE_PATH = "./data/sphere/sphere.case"
+ENSIGHT_CASE_DIR = "./data/sphere"
+ENSIGHT_CASE_PATH = op.join(ENSIGHT_CASE_DIR, "sphere.case")
 
 
 def test_read_sphere_case():
@@ -41,7 +43,7 @@ def test_read_sphere_case():
     assert part.number_of_nodes == 50
     assert part.number_of_elements == 96
 
-    with open(geofile.file_path, "rb") as fp_geo:
+    with geofile.open() as fp_geo:
         nodes = part.read_nodes(fp_geo)
         assert nodes.shape == NODES_REF.shape
         assert nodes.dtype == NODES_REF.dtype
@@ -71,7 +73,7 @@ def test_read_sphere_case():
 
     # check variables
     variable = case.get_variable("RTData")
-    with open(variable.file_path, "rb") as fp:
+    with variable.open() as fp:
         variable_data = variable.read_node_data(fp, part.part_id)
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
@@ -109,7 +111,7 @@ def test_read_sphere_case_mmap():
     assert part.number_of_nodes == 50
     assert part.number_of_elements == 96
 
-    with open(geofile.file_path, "rb") as fp_geo, mmap.mmap(fp_geo.fileno(), 0, access=mmap.ACCESS_READ) as mm_geo:
+    with geofile.mmap() as mm_geo:
         nodes = part.read_nodes(mm_geo)
         assert nodes.shape == NODES_REF.shape
         assert nodes.dtype == NODES_REF.dtype
@@ -138,14 +140,48 @@ def test_read_sphere_case_mmap():
 
         # TODO check connectivity
 
+    with geofile.mmap_writable() as mm_geo:
+        nodes = part.read_nodes(mm_geo)
+        assert nodes.shape == NODES_REF.shape
+        assert nodes.dtype == NODES_REF.dtype
+        assert np.allclose(nodes, NODES_REF)
+        assert nodes.flags.writeable
+
+        node_ids = part.read_node_ids(mm_geo)
+        assert node_ids.shape == NODE_IDS_REF.shape
+        assert node_ids.dtype == NODE_IDS_REF.dtype
+        assert np.equal(node_ids, NODE_IDS_REF).all()
+        assert nodes.flags.writeable
+
+        assert len(part.element_blocks) == 1
+        block = part.element_blocks[0]
+        assert block.element_type == ElementType.TRIA3
+        connectivity = block.read_connectivity(mm_geo)
+        assert connectivity.shape == (96, 3)
+        assert connectivity.dtype == np.int32
+        assert connectivity.flags.writeable
+
+        element_ids = block.read_element_ids(mm_geo)
+        assert element_ids.shape == ELEMENT_IDS_REF.shape
+        assert element_ids.dtype == ELEMENT_IDS_REF.dtype
+        assert np.equal(element_ids, ELEMENT_IDS_REF).all()
+        assert element_ids.flags.writeable
+
     # check variables
     variable = case.get_variable("RTData")
-    with open(variable.file_path, "rb") as fp_var, mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_READ) as mm_var:
+    with variable.mmap() as mm_var:
         variable_data = variable.read_node_data(mm_var, part.part_id)
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)
         assert not variable_data.flags.writeable
+
+    with variable.mmap_writable() as mm_var:
+        variable_data = variable.read_node_data(mm_var, part.part_id)
+        assert variable_data.shape == VARIABLE_DATA_REF.shape
+        assert variable_data.dtype == VARIABLE_DATA_REF.dtype
+        assert np.allclose(variable_data, VARIABLE_DATA_REF)
+        assert variable_data.flags.writeable
 
 
 def test_sphere_case_ensight2obj():
@@ -164,6 +200,77 @@ def test_sphere_case_ensight2vtk():
             ensight_case_path=ENSIGHT_CASE_PATH,
             output_vtk_path_given=op.join(temp_dir, "sphere.vtk")
         )
+
+
+def test_sphere_case_ensight_transform_translate():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        shutil.copytree(ENSIGHT_CASE_DIR, op.join(temp_dir, "sphere"))
+        temp_case = op.join(temp_dir, "sphere/sphere.case")
+
+        assert 0 == ensight_transform(
+            ensight_case_path=temp_case,
+            translate=np.asarray([5, 6, 7])
+        )
+
+        case = read_case(temp_case)
+        geofile = case.get_geometry_model()
+        part = geofile.get_part_by_name("VTK Part")
+        with geofile.open() as fp_geo:
+            nodes = part.read_nodes(fp_geo)
+            N = nodes.shape[0]
+
+            for i in range(N):
+                assert np.allclose(nodes[i],
+                                   NODES_REF[i] + np.asarray([5, 6, 7]))
+
+
+def test_sphere_case_ensight_transform_scale():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        shutil.copytree(ENSIGHT_CASE_DIR, op.join(temp_dir, "sphere"))
+        temp_case = op.join(temp_dir, "sphere/sphere.case")
+
+        assert 0 == ensight_transform(
+            ensight_case_path=temp_case,
+            scale=np.asarray([.5, 1, 2])
+        )
+
+        case = read_case(temp_case)
+        geofile = case.get_geometry_model()
+        part = geofile.get_part_by_name("VTK Part")
+        with geofile.open() as fp_geo:
+            nodes = part.read_nodes(fp_geo)
+            N = nodes.shape[0]
+
+            for i in range(N):
+                assert np.allclose(nodes[i],
+                                   NODES_REF[i] * np.asarray([.5, 1, 2]))
+
+
+def test_sphere_case_ensight_transform_matrix():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        shutil.copytree(ENSIGHT_CASE_DIR, op.join(temp_dir, "sphere"))
+        temp_case = op.join(temp_dir, "sphere/sphere.case")
+
+        assert 0 == ensight_transform(
+            ensight_case_path=temp_case,
+            matrix=np.asarray([
+                [.5, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 2, 0],
+                [5, 6, 7, 1],
+            ])
+        )
+
+        case = read_case(temp_case)
+        geofile = case.get_geometry_model()
+        part = geofile.get_part_by_name("VTK Part")
+        with geofile.open() as fp_geo:
+            nodes = part.read_nodes(fp_geo)
+            N = nodes.shape[0]
+
+            for i in range(N):
+                assert np.allclose(nodes[i],
+                                   NODES_REF[i] * np.asarray([.5, 1, 2]) + np.asarray([5, 6, 7]))
 
 
 NODES_REF = np.asarray([

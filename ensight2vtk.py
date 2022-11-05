@@ -92,8 +92,7 @@ def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str) ->
     geofile = case.get_geometry_model()
     part = geofile.parts[part_id]
 
-    with open(vtk_output_path, "w") as fp_vtk, open(geofile.file_path, "rb") as fp_geo,\
-            mmap.mmap(fp_geo.fileno(), 0, access=mmap.ACCESS_READ) as mm_geo:
+    with open(vtk_output_path, "w") as fp_vtk, geofile.mmap() as mm_geo:
 
         print("# vtk DataFile Version 2.0", file=fp_vtk)
         print("ensight2vtk output file", file=fp_vtk)
@@ -151,8 +150,7 @@ def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str) ->
                 variable = case.get_variable(variable_name)
                 if not variable.is_defined_for_part_id(part_id):
                     continue
-                with open(variable.file_path, "rb") as fp_var,\
-                        mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_READ) as mm_var:
+                with variable.mmap() as mm_var:
                     data = variable.read_node_data(mm_var, part_id)
                     assert data is not None
 
@@ -175,8 +173,7 @@ def write_vtk_part(case: EnsightCaseFile, part_id: int, vtk_output_path: str) ->
                 if not variable.is_defined_for_part_id(part_id):
                     continue
 
-                with open(variable.file_path, "rb") as fp_var,\
-                        mmap.mmap(fp_var.fileno(), 0, access=mmap.ACCESS_READ) as mm_var:
+                with variable.mmap() as mm_var:
                     all_data = []
                     for block in part.element_blocks:
                         data = variable.read_element_data(mm_var, part_id, block.element_type)
