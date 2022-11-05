@@ -55,7 +55,7 @@ with variable.mmap_writable() as mm_var:
 # increment X coordinate
 ensight_transform --translate 1 0 0 sphere.case
 
-# scale by 1000 (eg. mm -> m conversion)
+# scale by 1000 (eg. m -> mm conversion)
 ensight_transform --scale 1e3 1e3 1e3 sphere.case
 
 # rotation matrix
