@@ -39,6 +39,13 @@ from the VTK library. For more information, see :ref:`Comparison with VTK librar
        data = variable.read_node_data(mm_var, part.part_id)
        data[:] = np.sqrt(data)                           # transform variable data in-place
 
+Installation
+------------
+
+::
+
+   pip install ensight-reader
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
