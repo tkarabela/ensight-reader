@@ -26,8 +26,7 @@ import re
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import (BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple,
-                    Type, TypeVar, Union)
+from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt

@@ -3,8 +3,8 @@ import tempfile
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-from ensightreader import (ElementType, EnsightGeometryFile, IdHandling,
-                           VariableLocation, VariableType, read_case)
+from ensightreader import (ElementType, EnsightGeometryFile, IdHandling, VariableLocation,
+                           VariableType, read_case)
 
 ENSIGHT_CASE_PATH = "./data/cavity/cavity.case"
 
