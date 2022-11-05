@@ -1,13 +1,14 @@
 import os.path as op
-import tempfile
 import shutil
+import tempfile
 
 import numpy as np
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
 from ensight_transform import ensight_transform
-from ensightreader import ElementType, EnsightGeometryFile, GeometryPart, IdHandling, read_case
+from ensightreader import (ElementType, EnsightGeometryFile, GeometryPart,
+                           IdHandling, read_case)
 
 ENSIGHT_CASE_DIR = "./data/sphere"
 ENSIGHT_CASE_PATH = op.join(ENSIGHT_CASE_DIR, "sphere.case")
