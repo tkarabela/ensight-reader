@@ -1,0 +1,7 @@
+# non-ghost cell types case, useful for testing EnSight Gold support, written by the library
+
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: cell_types.geo
