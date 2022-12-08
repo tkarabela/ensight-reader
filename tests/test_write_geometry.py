@@ -246,6 +246,7 @@ def test_create_geometry_with_every_non_ghost_cell_type():
                             np.newaxis]
                     )
 
+        # check binary
         with open(output_geofile_path, "rb") as fp:
             geofile_data = fp.read()
 
@@ -253,3 +254,31 @@ def test_create_geometry_with_every_non_ghost_cell_type():
             ref_geofile_data = fp.read()
 
         assert geofile_data == ref_geofile_data
+
+        # check contents - this exercises reading all non-ghost element types
+        geofile = EnsightGeometryFile.from_file_path(output_geofile_path, changing_geometry_per_part=False)
+        pids = geofile.get_part_ids()
+        assert len(pids) == 1
+        part = geofile.get_part_by_id(pids[0])
+        assert len(part.element_blocks) == len(element_types_to_nodes)
+        assert part.is_surface()
+        assert part.is_volume()
+
+        with geofile.open() as fp:
+            for block in part.element_blocks:
+                assert block.number_of_elements == 1
+                if block.element_type.has_constant_number_of_nodes_per_element():
+                    connectivity = block.read_connectivity(fp)
+                    assert connectivity.shape == (1, block.element_type.nodes_per_element)
+                    assert connectivity.tolist() == list(sorted(connectivity.tolist()))
+                    if len(connectivity) > 1:
+                        assert set(list(np.diff(connectivity[0]))) == {1}
+                elif block.element_type == ElementType.NSIDED:
+                    polygon_node_counts_, polygon_connectivity_ = block.read_connectivity_nsided(fp)
+                    assert (polygon_node_counts_ == polygon_node_counts).all()
+                    assert (polygon_connectivity_ == np.add(polygon_connectivity, element_types_to_node_offset[ElementType.NSIDED])).all()
+                elif block.element_type == ElementType.NFACED:
+                    polyhedra_face_counts_, face_node_counts_, face_connectivity_ = block.read_connectivity_nfaced(fp)
+                    assert (polyhedra_face_counts_ == polyhedra_face_counts).all()
+                    assert (face_node_counts_ == face_node_counts).all()
+                    assert (face_connectivity_ == np.add(face_connectivity, element_types_to_node_offset[ElementType.NFACED])).all()
