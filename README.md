@@ -1,3 +1,5 @@
+[![CI - build](https://img.shields.io/github/workflow/status/tkarabela/ensight-reader/CI)](https://github.com/tkarabela/ensight-reader/actions)
+[![CI - coverage](https://img.shields.io/codecov/c/github/tkarabela/ensight-reader)](https://app.codecov.io/github/tkarabela/ensight-reader)
 ![PyPI - Version](https://img.shields.io/pypi/v/ensight-reader.svg?style=flat-square)
 ![PyPI - Status](https://img.shields.io/pypi/status/ensight-reader.svg?style=flat-square)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ensight-reader.svg?style=flat-square)
