@@ -33,12 +33,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
-#    - name: Import order check with isort, based on 100 characters per line
-#      run: |
-#          isort -l 100 --check .
     - name: Typecheck with mypy
       run: |
           mypy
     - name: Test with pytest
       run: |
         python -m pytest
+    - name: Generate coverage report for ensightreader.py
+      run: |
+        python -m pytest --cov=ensightreader --cov-report=xml
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        env_vars: OS,PYTHON

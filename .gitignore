@@ -6,3 +6,5 @@ venv/
 .pytest_cache/
 dist/
 ensight_reader.egg-info/
+.coverage
+coverage.xml
