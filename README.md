@@ -1,5 +1,6 @@
-[![CI - build](https://img.shields.io/github/workflow/status/tkarabela/ensight-reader/CI)](https://github.com/tkarabela/ensight-reader/actions)
+[![CI - build](https://img.shields.io/github/actions/workflow/status/tkarabela/ensight-reader/main.yml?branch=master)](https://github.com/tkarabela/ensight-reader/actions)
 [![CI - coverage](https://img.shields.io/codecov/c/github/tkarabela/ensight-reader)](https://app.codecov.io/github/tkarabela/ensight-reader)
+![MyPy checked](http://www.mypy-lang.org/static/mypy_badge.svg)
 ![PyPI - Version](https://img.shields.io/pypi/v/ensight-reader.svg?style=flat-square)
 ![PyPI - Status](https://img.shields.io/pypi/status/ensight-reader.svg?style=flat-square)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ensight-reader.svg?style=flat-square)
@@ -12,7 +13,7 @@ a common format for results of computational fluid dynamics (CFD) simulations.
 It also comes with a few CLI tools, notably `ensight_transform` which
 allows you to perform in-place scaling/translation/etc. of the geometry in your case.
 
-The library designed for efficient, selective, memory-mapped access to data from EnSight Gold case --
+The library designed for efficient, selective, memory-mapped access to data from EnSight Gold case –
 something that would be useful when importing the data into other systems. If you're looking for a more "batteries included" solution, look at
 [`vtkEnSightGoldBinaryReader`](https://vtk.org/doc/nightly/html/classvtkEnSightGoldBinaryReader.html)
 from the VTK library ([see docs for comparison](https://ensight-reader.readthedocs.io/en/latest/design-howto.html#comparison-with-vtk-library)).
@@ -28,7 +29,7 @@ from the VTK library ([see docs for comparison](https://ensight-reader.readthedo
 pip install ensight-reader
 ```
 
-### Example -- Python API
+### Example – Python API
 
 ```python
 import ensightreader
@@ -51,7 +52,7 @@ with variable.mmap_writable() as mm_var:
     data[:] = np.sqrt(data)                           # transform variable data in-place
 ```
 
-### Example -- CLI
+### Example – CLI
 
 ```sh
 # increment X coordinate
