@@ -32,6 +32,7 @@ import numpy as np
 import numpy.typing as npt
 
 T = TypeVar('T')
+TNum = TypeVar('TNum', np.int32, np.float32)
 SeekableBufferedReader = Union[BinaryIO, _mmap.mmap]
 SeekableBufferedWriter = Union[BinaryIO, _mmap.mmap]
 Float32NDArray = npt.NDArray[np.float32]
@@ -82,11 +83,10 @@ class IdHandling(Enum):
     @property
     def ids_present(self) -> bool:
         """Return True if IDs are present in geometry file, otherwise False"""
-        return self in (self.GIVEN, self.IGNORE)
+        return self in (self.GIVEN, self.IGNORE)  # type: ignore[comparison-overlap]
 
     def __str__(self) -> str:
         return self.value
-
 
 
 class ChangingGeometry(Enum):
@@ -482,7 +482,7 @@ class UnstructuredElementBlock:
 
     @staticmethod
     def write_element_block(fp: SeekableBufferedWriter, element_type: ElementType, connectivity: Int32NDArray,
-                            element_ids: Optional[Int32NDArray] = None):
+                            element_ids: Optional[Int32NDArray] = None) -> None:
         """
         Write element block (not NSIDED/NFACED) to given opened file
 
@@ -503,7 +503,7 @@ class UnstructuredElementBlock:
 
     @staticmethod
     def write_element_block_nsided(fp: SeekableBufferedWriter, polygon_node_counts: Int32NDArray,
-                                   polygon_connectivity: Int32NDArray, element_ids: Optional[Int32NDArray] = None):
+                                   polygon_connectivity: Int32NDArray, element_ids: Optional[Int32NDArray] = None) -> None:
         """
         Write NSIDED element block to given opened file
 
@@ -524,7 +524,7 @@ class UnstructuredElementBlock:
     @staticmethod
     def write_element_block_nfaced(fp: SeekableBufferedWriter, polyhedra_face_counts: Int32NDArray,
                                    face_node_counts: Int32NDArray, face_connectivity: Int32NDArray,
-                                   element_ids: Optional[Int32NDArray] = None):
+                                   element_ids: Optional[Int32NDArray] = None) -> None:
         """
         Write NFACED element block to given opened file
 
@@ -713,7 +713,7 @@ class GeometryPart:
 
     @staticmethod
     def write_part_header(fp: SeekableBufferedWriter, part_id: int, part_name: str,
-                          node_coordinates: Float32NDArray, node_ids: Optional[Int32NDArray] = None):
+                          node_coordinates: Float32NDArray, node_ids: Optional[Int32NDArray] = None) -> None:
         """
         Write part header to given opened file
 
@@ -734,7 +734,7 @@ class GeometryPart:
         write_floats(fp, node_coordinates.flatten("F"))
 
 
-def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -> np.ndarray:
+def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[TNum]) -> npt.NDArray[TNum]:
     if isinstance(fp, _mmap.mmap):
         offset = fp.tell()
         bytes_to_read = count * dtype().itemsize
@@ -747,7 +747,7 @@ def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -
             # For write-through memory-mapped access, simply create an `ndarray` backed by the
             # mmap, which results in writable `ndarray`; the `fp.read()` call is only used to advance
             # the file pointer in this case.
-            arr: np.ndarray = np.ndarray((count,), dtype=dtype, buffer=fp, offset=offset)
+            arr: npt.NDArray[TNum] = np.ndarray((count,), dtype=dtype, buffer=fp, offset=offset)
             return arr
         else:
             # For read-only memory-mapped access, we want to wrap `bytes` as returned from the mmap;
@@ -765,7 +765,7 @@ def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[np.number]) -
         return arr
 
 
-def write_array(fp: SeekableBufferedWriter, data: np.ndarray):
+def write_array(fp: SeekableBufferedWriter, data: npt.NDArray[TNum]) -> None:
     fp.write(data.data)
 
 
@@ -773,7 +773,7 @@ def read_ints(fp: SeekableBufferedReader, count: int) -> Int32NDArray:
     return read_array(fp, count, np.int32)
 
 
-def write_ints(fp: SeekableBufferedWriter, data: Int32NDArray):
+def write_ints(fp: SeekableBufferedWriter, data: Int32NDArray) -> None:
     assert data.dtype == np.int32
     write_array(fp, data)
 
@@ -782,7 +782,7 @@ def read_int(fp: SeekableBufferedReader) -> int:
     return int(read_ints(fp, 1)[0])
 
 
-def write_int(fp: SeekableBufferedReader, value: int):
+def write_int(fp: SeekableBufferedReader, value: int) -> None:
     write_ints(fp, np.asarray([value], dtype=np.int32))
 
 
@@ -790,7 +790,7 @@ def read_floats(fp: SeekableBufferedReader, count: int) -> Float32NDArray:
     return read_array(fp, count, np.float32)
 
 
-def write_floats(fp: SeekableBufferedWriter, data: Float32NDArray):
+def write_floats(fp: SeekableBufferedWriter, data: Float32NDArray) -> None:
     assert data.dtype == np.float32
     write_array(fp, data)
 
@@ -799,7 +799,7 @@ def read_float(fp: SeekableBufferedReader) -> float:
     return float(read_floats(fp, 1)[0])
 
 
-def write_float(fp: SeekableBufferedReader, value: float):
+def write_float(fp: SeekableBufferedReader, value: float) -> None:
     write_floats(fp, np.asarray([value], dtype=np.float32))
 
 
@@ -810,7 +810,7 @@ def read_string(fp: SeekableBufferedReader, count: int) -> str:
     return data.decode("ascii", "replace")
 
 
-def write_string(fp: SeekableBufferedWriter, s: Union[str, bytes]):
+def write_string(fp: SeekableBufferedWriter, s: Union[str, bytes]) -> None:
     if isinstance(s, str):
         data = s.encode("ascii", "replace")
     else:
@@ -829,7 +829,7 @@ def peek_line(fp: SeekableBufferedReader) -> str:
     return s
 
 
-def write_line(fp: SeekableBufferedWriter, s: Union[str, bytes]):
+def write_line(fp: SeekableBufferedWriter, s: Union[str, bytes]) -> None:
     assert len(s) <= 80
 
     if isinstance(s, str):
@@ -965,7 +965,7 @@ class EnsightGeometryFile:
     @staticmethod
     def write_header(fp: SeekableBufferedWriter, description_line1: str = "Generated by ensightreader",
                      description_line2: str = "", node_id_handling: IdHandling = IdHandling.OFF,
-                     element_id_handling: IdHandling = IdHandling.OFF, extents: Optional[Float32NDArray] = None):
+                     element_id_handling: IdHandling = IdHandling.OFF, extents: Optional[Float32NDArray] = None) -> None:
         """
         Writes geometry file header to given opened file
 
