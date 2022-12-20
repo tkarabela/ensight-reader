@@ -37,6 +37,8 @@ SeekableBufferedWriter = Union[BinaryIO, _mmap.mmap]
 Float32NDArray = npt.NDArray[np.float32]
 Int32NDArray = npt.NDArray[np.int32]
 
+__version__ = "0.10.0"
+
 
 class EnsightReaderError(Exception):
     """
