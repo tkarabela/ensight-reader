@@ -120,8 +120,7 @@ class VariableType(Enum):
     Type of variable in EnSight Gold case
 
     .. Note::
-        Complex variables, constants, and "per measured"
-        variables are not supported.
+        Complex variables and "per measured" variables are not supported.
 
     """
 
@@ -1488,6 +1487,78 @@ class EnsightVariableFileSet:
                                                   variable_type=self.variable_type, geofile=geofile)
 
 
+@dataclass
+class EnsightConstantVariable:
+    """
+    Constant per case variable
+
+    Represents ``constant per case`` or ``constant per case file`` variable.
+
+    Attributes:
+        timeset: time set in which the variable is defined, or None if it's not transient
+        variable_name: name of the variable ('description' field in casefile)
+        values: list of values (it has length 1 for non-transient variables; for transient
+            variable its length corresponds to number of timesteps)
+    """
+    timeset: Optional[Timeset]
+    variable_name: str
+    values: List[float]
+
+    def get_value(self, timestep: int = 0) -> float:
+        """Return constant value at given timestep (for non-transient constants, use timestep 0)"""
+        return self.values[timestep]
+
+    @classmethod
+    def from_casefile_line(cls, key: str, values: List[str], casefile_dir_path: str) -> Tuple["EnsightConstantVariable",
+                                                                                              Optional[int]]:
+        if "file" in key:
+            # constant per case file
+            if len(values) == 2:
+                ts = None
+                variable_name = values[0]
+                cvfilename = values[1]
+
+                return cls(
+                    timeset=None,
+                    variable_name=variable_name,
+                    values=read_numbers_from_text_file(op.join(casefile_dir_path, cvfilename), float)
+                ), ts
+            elif len(values) == 3:
+                ts = int(values[0])
+                variable_name = values[1]
+                cvfilename = values[2]
+
+                return cls(
+                    timeset=None,
+                    variable_name=variable_name,
+                    values=read_numbers_from_text_file(op.join(casefile_dir_path, cvfilename), float)
+                ), ts
+            else:
+                raise ValueError("Unsupported constant variable line")
+        else:
+            # constant per case
+            if len(values) == 2:
+                ts = None
+                variable_name = values[0]
+                variable_value = float(values[1])
+                return cls(
+                    timeset=None,
+                    variable_name=variable_name,
+                    values=[variable_value]
+                ), ts
+            elif len(values) < 2:
+                raise ValueError("Unsupported constant variable line")
+            else:
+                ts = int(values[0])
+                variable_name = values[1]
+                variable_values = [float(x) for x in values[2:]]
+                return cls(
+                    timeset=None,
+                    variable_name=variable_name,
+                    values=variable_values
+                ), ts
+
+
 def read_numbers_from_text_file(path: str, type_: Type[T]) -> List[T]:
     output: List[T] = []
     with open(path) as fp:
@@ -1541,6 +1612,7 @@ class EnsightCaseFile:
         casefile_path: path to the ``*.case`` file
         geometry_model: accessor to the ``model`` geometry data
         variables: dictionary mapping variable names keys to variable data accessors
+        constant_variables: dictionary mapping constant variable names keys to `EnsightConstantVariable`
         timesets: dictionary mapping time set IDs to time set description objects
 
     """
@@ -1548,6 +1620,7 @@ class EnsightCaseFile:
     casefile_path: str
     geometry_model: EnsightGeometryFileSet
     variables: Dict[str, EnsightVariableFileSet]  # variable name -> EnsightVariableFileSet
+    constant_variables: Dict[str, EnsightConstantVariable]  # variable name -> EnsightConstantVariable
     timesets: Dict[int, Timeset]  # time set ID -> TimeSet
     _geometry_file_cache: Dict[int, EnsightGeometryFile] = field(default_factory=dict, repr=False)
     _variable_file_cache: Dict[Tuple[int, str], EnsightVariableFile] = field(default_factory=dict, repr=False)
@@ -1599,6 +1672,18 @@ class EnsightCaseFile:
             self._variable_file_cache[cache_key] = self.variables[name].get_file(geofile=geofile, timestep=timestep)
         return self._variable_file_cache[cache_key]
 
+    def get_constant_variable_value(self, name: str, timestep: int = 0) -> float:
+        """
+        Get value of constant per-case variable for given timestep
+
+        Args:
+            name: name of the constant variable
+            timestep: number of timestep, starting from zero (for non-transient
+                variable, use 0)
+
+        """
+        return self.constant_variables[name].get_value(timestep)
+
     def is_transient(self) -> bool:
         """Return True if the case is transient (has at least one time set defined)"""
         return len(self.timesets) > 0
@@ -1612,6 +1697,10 @@ class EnsightCaseFile:
         """Return names of variables defined per-element"""
         return [name for name, variable in self.variables.items()
                 if variable.variable_location == VariableLocation.PER_ELEMENT]
+
+    def get_constant_variables(self) -> List[str]:
+        """Return names of constant variables defined per-case"""
+        return list(self.constant_variables.keys())
 
     def get_time_values(self, timeset_id: Optional[int] = None) -> Optional[List[float]]:
         """
@@ -1645,7 +1734,12 @@ class EnsightCaseFile:
         return self.timesets[timeset_id].time_values
 
     def get_variables(self) -> List[str]:
-        """Return list of variable names"""
+        """
+        Return list of variable names
+
+        Note that this does not include per-case constants.
+
+        """
         return list(self.variables.keys())
 
     @classmethod
@@ -1666,7 +1760,8 @@ class EnsightCaseFile:
         geometry_model = None
         geometry_model_ts: Optional[int] = None
         variables: Dict[str, EnsightVariableFileSet] = {}
-        variables_ts: Dict[str, int] = {}
+        constant_variables: Dict[str, EnsightConstantVariable] = {}
+        variables_ts: Dict[str, Optional[int]] = {}
         timesets: Dict[int, Timeset] = {}
 
         with open(casefile_path) as fp:
@@ -1726,6 +1821,13 @@ class EnsightCaseFile:
                 elif current_section == "VARIABLE":
                     try:
                         variable_type_, variable_location_ = key.split(" per ")  # type: ignore[union-attr]
+
+                        if variable_type_ == "constant" and variable_location_.startswith("case"):
+                            constant_variable, ts = EnsightConstantVariable.from_casefile_line(key, values, casefile_dir_path)  # type: ignore[arg-type]
+                            constant_variables[constant_variable.variable_name] = constant_variable
+                            variables_ts[constant_variable.variable_name] = ts
+                            continue
+
                         variable_type = VariableType(variable_type_)
                         variable_location = VariableLocation(variable_location_)
                     except ValueError:
@@ -1815,12 +1917,16 @@ class EnsightCaseFile:
 
         for variable_name, variable_ts in variables_ts.items():
             if variable_ts is not None:
-                variables[variable_name].timeset = timesets[variable_ts]
+                if variable_name in variables:
+                    variables[variable_name].timeset = timesets[variable_ts]
+                elif variable_name in constant_variables:
+                    constant_variables[variable_name].timeset = timesets[variable_ts]
 
         return cls(
             casefile_path=casefile_path,
             geometry_model=geometry_model,
             variables=variables,
+            constant_variables=constant_variables,
             timesets=timesets,
         )
 
@@ -1858,6 +1964,14 @@ class EnsightCaseFile:
         # variables
         if self.variables:
             case_lines.append("VARIABLE")
+            for constant_variable in self.constant_variables.values():
+                variable_line = [f"constant per case:"]
+                if constant_variable.timeset:
+                    variable_line.append(str(constant_variable.timeset.timeset_id))
+                variable_line.append(constant_variable.variable_name)
+                variable_line.append(" ".join(f"{x:g}" for x in constant_variable.values))
+                case_lines.append(" ".join(variable_line))
+
             for variable in self.variables.values():
                 variable_line = [f"{variable.variable_type} per {variable.variable_location}:"]
                 if variable.timeset:
