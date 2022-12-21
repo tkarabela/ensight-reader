@@ -147,6 +147,84 @@ Code example
            ...
            213.36838, 232.34589], dtype=float32)
 
+Writing data using ``ensight-reader``
+-------------------------------------
+
+Despite its name, ``ensight-reader`` can be used to modify existing EnSight Gold cases
+or even create cases from scratch. Due to the unopinionated, low-level nature of the library,
+this can be tricky -- especially if you're not already familiar with inner workings
+of the EnSight Gold format.
+
+Here are some examples to get you started:
+
+Modifying variable values
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    >>> import ensightreader
+
+    >>> case = ensightreader.read_case("data/sphere/sphere.case")
+    >>> geofile = case.get_geometry_model()
+    >>> part_ids = geofile.get_part_ids()
+
+    >>> if case.variables["RTData"].timeset is None:
+    ...     timesteps = [0]
+    ... else:
+    ...     timesteps = list(range(len(case.get_time_values()))
+
+    >>> for timestep in timesteps:
+    ...     variable = case.get_variable("RTData", timestep)
+    ...     with variable.mmap_writable() as mm_var:
+    ...         for part_id in part_ids:
+    ...             arr = variable.read_node_data(fp_var, part_id)
+    ...             arr[:] *= 2
+
+Defining new per-case constant
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    >>> import ensightreader
+
+    >>> case = ensightreader.read_case("data/sphere/sphere.case")
+    >>> constant = ensightreader.EnsightConstantVariable(timeset=None, variable_name="my_variable", values=[42.0])
+    >>> case.constant_variables[constant.variable_name] = constant
+    >>> case.to_file("data/sphere/sphere-with-constant.case")
+
+Changing node coordinates
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    >>> import ensightreader
+
+    >>> case = ensightreader.read_case("data/sphere/sphere.case")
+    >>> geofile = case.get_geometry_model()
+    >>> part_ids = geofile.get_part_ids()
+
+    >>> with geofile.mmap_writable() as mm_geo:
+    ...     for part_id in geofile.get_part_ids():
+    ...         part = geofile.get_part_by_id(part_id)
+    ...         arr = part.read_nodes(mm_geo)
+    ...         arr[:, 0] += 1.0  # increment X coordiante
+
+
+Creating geometry file from scratch
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Please see ``tests/test_write_geometry.py``, essentially you will need to do:
+
+::
+
+    >>> from ensightreader import EnsightGeometryFile, GeometryPart, GeometryPart
+
+    >>> with open(output_geofile_path, "wb") as fp:
+    ...     EnsightGeometryFile.write_header(fp)
+    ...     GeometryPart.write_part_header(fp, part_id=1, part_name="TestElementTypes", node_coordinates=node_coordinates)
+    ...     UnstructuredElementBlock.write_element_block(fp, element_type=et, connectivity=connectivity)
+
+
 Code examples
 -------------
 

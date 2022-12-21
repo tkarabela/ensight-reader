@@ -6,15 +6,18 @@
 ensight-reader
 ==============
 
-This library provides a pure Python reader for the EnSight Gold data format,
+This library provides a pure Python reader (with some writing capability) for the EnSight Gold data format,
 a common format for results of computational fluid dynamics (CFD) simulations.
 It also comes with a few CLI tools, notably ``ensight_transform`` which
 allows you to perform in-place scaling/translation/etc. of the geometry in your case.
 
 It's designed for efficient, selective, memory-mapped access to data from EnSight Gold case --
-something that would be useful when importing the data into other systems.
+something that would be useful when importing the data into other systems. Primary focus
+is on reading existing EnSight Gold cases, but it can also be used to modify existing data
+files or even create files from scratch.
 
-If you're looking for a more "batteries included" solution, look at
+To get the most out of this library, familiarity with the EnSight Gold format structure
+is beneficial. If you're looking for a more "batteries included" solution, look at
 `vtkEnSightGoldBinaryReader <https://vtk.org/doc/nightly/html/classvtkEnSightGoldBinaryReader.html>`_
 from the VTK library. For more information, see :ref:`Comparison with VTK library`.
 
@@ -53,6 +56,7 @@ Installation
    design-howto
    api-reference
    ensight-transform-cli
+   changelog
 
 License
 -------

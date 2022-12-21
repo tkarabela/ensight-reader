@@ -9,6 +9,8 @@ in given EnSight Gold case. Your original geofile will be modified!
 
 Examples:
 
+::
+
     # increment X coordinate
     ensight_transform --translate 1 0 0 sphere.case
 

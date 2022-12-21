@@ -8,7 +8,7 @@
 
 # ensight-reader
 
-This library provides a pure Python reader for the EnSight Gold data format,
+This library provides a pure Python reader (with some writing capability) for the EnSight Gold data format,
 a common format for results of computational fluid dynamics (CFD) simulations.
 It also comes with a few CLI tools, notably `ensight_transform` which
 allows you to perform in-place scaling/translation/etc. of the geometry in your case.
