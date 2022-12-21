@@ -291,6 +291,14 @@ class Timeset:
     filename_numbers: List[int]
     time_values: List[float]
 
+    @staticmethod
+    def filename_numbers_from_arithmetic_sequence(file_start_number: int, number_of_steps: int, filename_increment: int) -> List[int]:
+        assert filename_increment >= 0
+        assert number_of_steps >= 0
+        assert file_start_number >= 0
+
+        return [file_start_number + i*filename_increment for i in range(number_of_steps)]
+
 
 @dataclass
 class UnstructuredElementBlock:
@@ -1760,15 +1768,19 @@ class EnsightCaseFile:
                     elif key == "filename start number":
                         current_timeset_file_start_number = int(values[0])
                         if current_timeset_file_start_number is not None and current_timeset_filename_increment is not None:
-                            current_timeset.filename_numbers = list(range(current_timeset_file_start_number,
-                                                                          current_timeset.number_of_steps,
-                                                                          current_timeset_filename_increment))
+                            current_timeset.filename_numbers = Timeset.filename_numbers_from_arithmetic_sequence(
+                                file_start_number=current_timeset_file_start_number,
+                                number_of_steps=current_timeset.number_of_steps,
+                                filename_increment=current_timeset_filename_increment
+                            )
                     elif key == "filename increment":
                         current_timeset_filename_increment = int(values[0])
                         if current_timeset_file_start_number is not None and current_timeset_filename_increment is not None:
-                            current_timeset.filename_numbers = list(range(current_timeset_file_start_number,    # type: ignore[union-attr]
-                                                                          current_timeset.number_of_steps,      # type: ignore[union-attr]
-                                                                          current_timeset_filename_increment))
+                            current_timeset.filename_numbers = Timeset.filename_numbers_from_arithmetic_sequence(  # type: ignore[union-attr]
+                                file_start_number=current_timeset_file_start_number,
+                                number_of_steps=current_timeset.number_of_steps,  # type: ignore[union-attr]
+                                filename_increment=current_timeset_filename_increment
+                            )
                     elif key == "time values":
                         current_timeset.time_values.extend(map(float, values))  # type: ignore[union-attr]
                     elif key == "filename numbers":
