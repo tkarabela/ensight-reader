@@ -1987,7 +1987,7 @@ class EnsightCaseFile:
             case_lines.append("TIME")
 
             for timeset in self.timesets.values():
-                case_lines.append(f"time set:              {timeset.timeset_id}")
+                case_lines.append(f"time set:              {timeset.timeset_id}{' '+timeset.description if timeset.description else ''}")
                 case_lines.append(f"number of steps:       {timeset.number_of_steps}")
 
                 if len(timeset.filename_numbers) >= 2:
