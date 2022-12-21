@@ -184,6 +184,22 @@ def test_read_sphere_case_mmap():
         assert variable_data.flags.writeable
 
 
+def test_write_sphere_case():
+    case = read_case(ENSIGHT_CASE_PATH)
+    text = case.to_string()
+    print(text)
+    assert text.strip() == """
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: sphere.0.00000.geo
+
+VARIABLE
+scalar per node: RTData sphere.0.00000_n.RTData
+""".strip()
+
+
 def test_sphere_case_ensight2obj():
     with tempfile.TemporaryDirectory() as temp_dir:
         # TODO check output file

@@ -88,6 +88,38 @@ def test_read_cavity_case():
                         assert variable_data.shape[0] == block.number_of_elements
 
 
+def test_write_cavity_case():
+    case = read_case(ENSIGHT_CASE_PATH)
+    text = case.to_string()
+    assert text.strip() == """
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: geometry
+
+VARIABLE
+vector per element: 1 U data/********/U
+scalar per element: 1 p data/********/p
+
+TIME
+time set:              1
+number of steps:       6
+filename start number: 0
+filename increment:    20
+time values:
+0 0.1 0.2 0.3 0.4 0.5
+""".strip()
+
+    # check that writing to file results in the same text
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_case_path = op.join(temp_dir, "cavity.case")
+        case.to_file(temp_case_path)
+
+        with open(temp_case_path) as fp:
+            assert fp.read().strip() == text.strip()
+
+
 def test_cavity_case_ensight2obj():
     with tempfile.TemporaryDirectory() as temp_dir:
         # TODO check output file

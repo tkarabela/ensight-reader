@@ -1,9 +1,10 @@
-from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType
+from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case
 import numpy as np
 import tempfile
 import os.path as op
 
 
+ENSIGHT_CASE_PATH = "./data/cell_types/cell_types.case"
 REFERENCE_GEOFILE_PATH = "./data/cell_types/cell_types.geo"
 
 
@@ -282,3 +283,15 @@ def test_create_geometry_with_every_non_ghost_cell_type():
                     assert (polyhedra_face_counts_ == polyhedra_face_counts).all()
                     assert (face_node_counts_ == face_node_counts).all()
                     assert (face_connectivity_ == np.add(face_connectivity, element_types_to_node_offset[ElementType.NFACED])).all()
+
+
+def test_write_cell_types_case():
+    case = read_case(ENSIGHT_CASE_PATH)
+    text = case.to_string()
+    assert text.strip() == """
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: cell_types.geo
+""".strip()

@@ -1824,6 +1824,96 @@ class EnsightCaseFile:
             timesets=timesets,
         )
 
+    def to_string(self) -> str:
+        """
+        Return .case file contents as a string
+
+        This method is useful if you wish to modify the case,
+        eg. add/remove variables, apply offset to time values, etc.
+
+        .. note::
+            This method works by serializing the internal representation,
+            meaning that any lines in the original .case file that were
+            skipped due to missing support from the library (as well as comments)
+            will not appear in the output at all.
+
+        """
+        case_lines = [
+            "FORMAT",
+            "type: ensight gold",
+            "",
+        ]
+
+        # model
+        case_lines.append("GEOMETRY")
+        model_line = ["model:"]
+        if self.geometry_model.timeset:
+            model_line.append(str(self.geometry_model.timeset.timeset_id))
+        model_line.append(self.geometry_model.filename)
+        if self.geometry_model.changing_geometry_per_part:
+            model_line.append("changing_geometry_per_part")
+        case_lines.append(" ".join(model_line))
+        case_lines.append("")
+
+        # variables
+        if self.variables:
+            case_lines.append("VARIABLE")
+            for variable in self.variables.values():
+                variable_line = [f"{variable.variable_type} per {variable.variable_location}:"]
+                if variable.timeset:
+                    variable_line.append(str(variable.timeset.timeset_id))
+                variable_line.append(variable.variable_name)
+                variable_line.append(variable.filename)
+                case_lines.append(" ".join(variable_line))
+
+            case_lines.append("")
+
+        # time
+        if self.timesets:
+            case_lines.append("TIME")
+
+            for timeset in self.timesets.values():
+                case_lines.append(f"time set:              {timeset.timeset_id}")
+                case_lines.append(f"number of steps:       {timeset.number_of_steps}")
+
+                if len(timeset.filename_numbers) >= 2:
+                    timeset_file_start_number = timeset.filename_numbers[0]
+                    timeset_filename_increment = timeset.filename_numbers[1] - timeset.filename_numbers[0]
+                else:
+                    timeset_file_start_number = 0
+                    timeset_filename_increment = 1
+
+                if timeset.filename_numbers == Timeset.filename_numbers_from_arithmetic_sequence(
+                                                   file_start_number=timeset_file_start_number,
+                                                   number_of_steps=timeset.number_of_steps,
+                                                   filename_increment=timeset_filename_increment
+                                               ):
+                    case_lines.append(f"filename start number: {timeset_file_start_number}")
+                    case_lines.append(f"filename increment:    {timeset_filename_increment}")
+                else:
+                    case_lines.append(f"filename numbers:")
+                    for i in range(0, len(timeset.filename_numbers), 6):
+                        case_lines.append(" ".join(f"{x}" for x in timeset.filename_numbers[i:i+6]))
+
+                case_lines.append(f"time values:")
+                for i in range(0, len(timeset.time_values), 6):
+                    case_lines.append(" ".join(f"{x:g}" for x in timeset.time_values[i:i+6]))
+
+        return "\n".join(case_lines)
+
+    def to_file(self, casefile_path: str) -> None:
+        """
+        Write EnSight Gold case to file
+
+        See `EnsightCaseFile.to_string()` for more.
+
+        Args:
+            casefile_path: path to the ``*.case`` file
+        """
+        text = self.to_string()
+        with open(casefile_path, "w") as fp:
+            fp.write(text)
+
 
 def read_case(path: str) -> EnsightCaseFile:
     """
