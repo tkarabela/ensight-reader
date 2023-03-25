@@ -21,7 +21,7 @@ import ensightreader
 # -- Project information -----------------------------------------------------
 
 project = 'ensight-reader'
-copyright = '2022, Tomas Karabela'
+copyright = '2022-2023, Tomas Karabela'
 author = 'Tomas Karabela'
 
 
