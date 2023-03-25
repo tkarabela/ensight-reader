@@ -52,8 +52,11 @@ Enum types
     :members:
 
 
-Exceptions
-----------
+Exceptions and warnings
+-----------------------
 
 .. autoclass:: EnsightReaderError
+    :members:
+
+.. autoclass:: EnsightReaderWarning
     :members:

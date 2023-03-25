@@ -1,0 +1,40 @@
+# this case file tests various features of the EnSight Gold face format
+
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: *****.geo changing_geometry_per_part
+
+VARIABLE
+constant per case: my_steady_constant 1.234
+scalar per element: my_transient_scalar_per_element *****.my_transient_scalar_per_element
+vector per element: my_transient_vector_per_element *****.my_transient_vector_per_element
+tensor symm per element: my_transient_tensorsymm_per_element *****.my_transient_tensorsymm_per_element
+tensor asym per element: my_transient_tensorasym_per_element *****.my_transient_tensorasym_per_element
+scalar per node: my_steady_scalar_per_node 00000.my_steady_scalar_per_node
+vector per node: my_steady_vector_per_node 00000.my_steady_vector_per_node
+tensor symm per node: my_steady_tensorsymm_per_node 00000.my_steady_tensorsymm_per_node
+tensor asym per node: my_steady_tensorasym_per_node 00000.my_steady_tensorasym_per_node
+
+TIME
+time set:               1
+number of steps:        3
+filename numbers:       100 200 300
+time values:            100.0 100.1 100.2
+
+time set:               2
+number of steps:        3
+filename start number:  100
+filename increment:     100
+time values:            100.0 100.1 100.2
+
+time set:               3
+number of steps:        3
+filename numbers file:  ts3_filename_numbers.txt
+time values file:       ts3_time_values.txt
+
+time set:               4 non_arithmetic_progression_timeset
+number of steps:        3
+filename numbers:       100 220 300
+time values:            100.0 100.1 100.2

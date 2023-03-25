@@ -1,6 +1,10 @@
-from ensightreader import read_case, VariableLocation, VariableType
+import pytest
+
+from ensightreader import read_case, VariableLocation, VariableType, EnsightReaderWarning
 
 ENSIGHT_CASE_PATH = "./data/dummy_case_file/dummy_case_file.case"
+ENSIGHT_CASE_PATH_WITH_UNMARKED_TIMESETS = "./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case"
+
 
 def test_read_dummy_case_file():
     case = read_case(ENSIGHT_CASE_PATH)
@@ -113,3 +117,15 @@ filename numbers:
 time values:
 100 100.1 100.2
 """.strip()
+
+
+def test_read_dummy_case_file_with_unmarked_timesets():
+    with pytest.warns(EnsightReaderWarning) as records:
+        read_case(ENSIGHT_CASE_PATH_WITH_UNMARKED_TIMESETS)
+
+    assert len(records) == 5
+    assert str(records[0].message) == "Geometry model looks transient, but no timeset is given (did you mean: 'model: 1 *****.geo'?) (path=./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case, line=7)"
+    assert str(records[1].message) == "Variable my_transient_scalar_per_element looks transient, but no timeset is given (did you mean: 'scalar per element: 1 my_transient_scalar_per_element *****.my_transient_scalar_per_element'?) (path=./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case, line=11)"
+    assert str(records[2].message) == "Variable my_transient_vector_per_element looks transient, but no timeset is given (did you mean: 'vector per element: 1 my_transient_vector_per_element *****.my_transient_vector_per_element'?) (path=./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case, line=12)"
+    assert str(records[3].message) == "Variable my_transient_tensorsymm_per_element looks transient, but no timeset is given (did you mean: 'tensor symm per element: 1 my_transient_tensorsymm_per_element *****.my_transient_tensorsymm_per_element'?) (path=./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case, line=13)"
+    assert str(records[4].message) == "Variable my_transient_tensorasym_per_element looks transient, but no timeset is given (did you mean: 'tensor asym per element: 1 my_transient_tensorasym_per_element *****.my_transient_tensorasym_per_element'?) (path=./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case, line=14)"

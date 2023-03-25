@@ -23,6 +23,7 @@ import mmap as _mmap
 import os
 import os.path as op
 import re
+import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -65,6 +66,31 @@ class EnsightReaderError(Exception):
         else:
             message = f"{msg} (path={self.file_path}, offset={self.file_offset})"
         super(EnsightReaderError, self).__init__(message)
+
+
+class EnsightReaderWarning(Warning):
+    """
+    Warning raised when parsing EnSight Gold binary files
+
+    Attributes:
+        file_path (str): path to file where the error was encountered
+        file_offset (int): approximate seek position of the error (this may be a bit past the place where
+            the error is - it's the seek position when this exception was raised)
+        file_lineno (int): line number of the error (this only applies to errors in ``*.case`` file,
+            as other files are binary)
+    """
+    def __init__(self, msg: str, fp: Optional[Union[TextIO, SeekableBufferedReader]] = None, lineno: Optional[int] = None):
+        self.file_path = getattr(fp, "name", None)
+        try:
+            self.file_offset = fp.tell() if fp else None
+        except OSError:
+            self.file_offset = None
+        self.file_lineno = lineno
+        if lineno is not None:
+            message = f"{msg} (path={self.file_path}, line={self.file_lineno})"
+        else:
+            message = f"{msg} (path={self.file_path}, offset={self.file_offset})"
+        super(EnsightReaderWarning, self).__init__(message)
 
 
 class IdHandling(Enum):
@@ -1801,6 +1827,14 @@ class EnsightCaseFile:
                             values.pop()
                         if len(values) == 1:
                             filename, = values
+
+                            if "*" in filename:
+                                corrected_line = f"{key}: 1 {' '.join(values)}"
+                                warnings.warn(EnsightReaderWarning(
+                                    f"Geometry model looks transient, but no timeset is given (did you mean: '{corrected_line}'?)",
+                                    fp, lineno
+                                ))
+
                             geometry_model = EnsightGeometryFileSet(
                                 casefile_dir_path,
                                 timeset=None,
@@ -1842,6 +1876,13 @@ class EnsightCaseFile:
                     elif len(values) > 3:
                         print(f"Warning: unsupported variable line ({casefile_path}:{lineno}), skipping")
                         continue
+
+                    if "*" in filename:
+                        corrected_line = f"{key}: 1 {' '.join(values)}"
+                        warnings.warn(EnsightReaderWarning(
+                            f"Variable {description} looks transient, but no timeset is given (did you mean: '{corrected_line}'?)",
+                            fp, lineno
+                        ))
 
                     variables[description] = EnsightVariableFileSet(casefile_dir_path,
                                                                     timeset=None,  # timeset will be added later
