@@ -1890,7 +1890,7 @@ class EnsightCaseFile:
                                                                     variable_type=variable_type,
                                                                     variable_name=description,
                                                                     filename=filename)
-                    variables_ts[description] = ts  # type: ignore[assignment]
+                    variables_ts[description] = ts
 
                 elif current_section == "TIME":
                     if key == "time set":
