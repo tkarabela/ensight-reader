@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.11.1 (2023-03-35)
+-------------------
+
+- Added a warning when .case file contains transient model or variables that do not have timeset ID defined.
+  ``ensightreader.read_case()`` will issue ``EnsightReaderWarning`` with suggested fix.
+
 0.11.0 (2022-12-21)
 -------------------
 
