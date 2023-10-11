@@ -1877,7 +1877,7 @@ class EnsightCaseFile:
                         print(f"Warning: unsupported variable line ({casefile_path}:{lineno}), skipping")
                         continue
 
-                    if "*" in filename:
+                    if "*" in filename and ts is None:
                         corrected_line = f"{key}: 1 {' '.join(values)}"
                         warnings.warn(EnsightReaderWarning(
                             f"Variable {description} looks transient, but no timeset is given (did you mean: '{corrected_line}'?)",

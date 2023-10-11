@@ -9,9 +9,11 @@ from ensightreader import (ElementType, EnsightGeometryFile, IdHandling, Variabl
 ENSIGHT_CASE_PATH = "./data/cavity/cavity.case"
 
 
-def test_read_cavity_case():
+def test_read_cavity_case(recwarn):
     # check casefile
     case = read_case(ENSIGHT_CASE_PATH)
+    assert len(recwarn) == 0
+
     VARIABLE_NAMES = ["U", "p"]
     TIME_VALUES = [0.00000e+00, 1.00000e-01, 2.00000e-01, 3.00000e-01, 4.00000e-01, 5.00000e-01]
     TIMESTEPS = list(range(len(TIME_VALUES)))
