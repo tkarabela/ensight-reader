@@ -38,18 +38,18 @@ import numpy as np
 case = ensightreader.read_case("example.case")
 geofile = case.get_geometry_model()
 
-part_names = geofile.get_part_names()                # ["internalMesh", ...]
+part_names = geofile.get_part_names()           # ["internalMesh", ...]
 part = geofile.get_part_by_name(part_names[0])
 N = part.number_of_nodes
 
 with geofile.open() as fp_geo:
-    node_coordinates = part.read_coordinates(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
+    node_coordinates = part.read_nodes(fp_geo)  # np.ndarray((N, 3), dtype=np.float32)
 
 variable = case.get_variable("UMean")
 
 with variable.mmap_writable() as mm_var:
     data = variable.read_node_data(mm_var, part.part_id)
-    data[:] = np.sqrt(data)                           # transform variable data in-place
+    data[:] = np.sqrt(data)                     # transform variable data in-place
 ```
 
 ### Example – CLI
