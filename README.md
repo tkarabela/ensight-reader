@@ -1,10 +1,10 @@
 [![CI - build](https://img.shields.io/github/actions/workflow/status/tkarabela/ensight-reader/main.yml?branch=master)](https://github.com/tkarabela/ensight-reader/actions)
 [![CI - coverage](https://img.shields.io/codecov/c/github/tkarabela/ensight-reader)](https://app.codecov.io/github/tkarabela/ensight-reader)
-![MyPy checked](http://www.mypy-lang.org/static/mypy_badge.svg)
-![PyPI - Version](https://img.shields.io/pypi/v/ensight-reader.svg?style=flat-square)
-![PyPI - Status](https://img.shields.io/pypi/status/ensight-reader.svg?style=flat-square)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ensight-reader.svg?style=flat-square)
-![License](https://img.shields.io/pypi/l/ensight-reader.svg?style=flat-square)
+[![MyPy & Ruffle checked](https://img.shields.io/badge/MyPy%20%26%20Ruffle-checked-blue?style=flat)](https://github.com/tkarabela/pysubs2/actions)
+![PyPI - Version](https://img.shields.io/pypi/v/ensight-reader.svg?style=flat)
+![PyPI - Status](https://img.shields.io/pypi/status/ensight-reader.svg?style=flat)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/ensight-reader.svg?style=flat)
+![License](https://img.shields.io/pypi/l/ensight-reader.svg?style=flat)
 
 # ensight-reader
 
