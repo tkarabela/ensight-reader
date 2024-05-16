@@ -16,7 +16,6 @@ For commandline usage, run the script with ``--help``.
 """
 
 import argparse
-import mmap
 import os.path as op
 import re
 import sys

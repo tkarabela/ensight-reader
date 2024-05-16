@@ -484,7 +484,7 @@ class UnstructuredElementBlock:
         try:
             element_type = ElementType.parse_from_line(element_type_line)
         except ValueError as e:
-            raise EnsightReaderError(f"Unexpected element type", fp) from e
+            raise EnsightReaderError("Unexpected element type", fp) from e
 
         number_of_elements = read_int(fp)
 
@@ -1301,7 +1301,7 @@ class EnsightVariableFile:
                         try:
                             element_type = ElementType.parse_from_line(element_type_line)
                         except ValueError as e:
-                            raise EnsightReaderError(f"Bad element type", fp) from e
+                            raise EnsightReaderError("Bad element type", fp) from e
 
                         if "undef" in element_type_line:
                             undefined_value = read_float(fp)
@@ -2006,7 +2006,7 @@ class EnsightCaseFile:
         if self.variables:
             case_lines.append("VARIABLE")
             for constant_variable in self.constant_variables.values():
-                variable_line = [f"constant per case:"]
+                variable_line = ["constant per case:"]
                 if constant_variable.timeset:
                     variable_line.append(str(constant_variable.timeset.timeset_id))
                 variable_line.append(constant_variable.variable_name)
@@ -2046,11 +2046,11 @@ class EnsightCaseFile:
                     case_lines.append(f"filename start number: {timeset_file_start_number}")
                     case_lines.append(f"filename increment:    {timeset_filename_increment}")
                 else:
-                    case_lines.append(f"filename numbers:")
+                    case_lines.append("filename numbers:")
                     for i in range(0, len(timeset.filename_numbers), 6):
                         case_lines.append(" ".join(f"{x}" for x in timeset.filename_numbers[i:i+6]))
 
-                case_lines.append(f"time values:")
+                case_lines.append("time values:")
                 for i in range(0, len(timeset.time_values), 6):
                     case_lines.append(" ".join(f"{x:g}" for x in timeset.time_values[i:i+6]))
 
