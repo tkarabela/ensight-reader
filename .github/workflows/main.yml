@@ -36,6 +36,10 @@ jobs:
     - name: Typecheck with mypy
       run: |
           mypy
+          mypy --strict ensightreader.py
+    - name: Check with ruff
+      run: |
+        ruff check
     - name: Test with pytest
       run: |
         python -m pytest
