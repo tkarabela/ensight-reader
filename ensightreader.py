@@ -780,12 +780,12 @@ def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[TNum]) -> npt
             # For write-through memory-mapped access, simply create an `ndarray` backed by the
             # mmap, which results in writable `ndarray`; the `fp.read()` call is only used to advance
             # the file pointer in this case.
-            arr: npt.NDArray[TNum] = np.ndarray((count,), dtype=dtype, buffer=fp, offset=offset)
+            arr: npt.NDArray[TNum] = np.ndarray((count,), dtype=dtype, buffer=memoryview(fp), offset=offset)
             return arr
         else:
             # For read-only memory-mapped access, we want to wrap `bytes` as returned from the mmap;
             # this results in non-writeable `ndarray`.
-            arr = np.frombuffer(buffer, dtype=dtype)
+            arr = np.frombuffer(buffer, dtype=dtype)  # type: ignore[no-untyped-call]
             return arr
     else:
         # For regular file access, we allocate buffer first and then read into it,
@@ -807,7 +807,7 @@ def read_ints(fp: SeekableBufferedReader, count: int) -> Int32NDArray:
 
 
 def write_ints(fp: SeekableBufferedWriter, data: Int32NDArray) -> None:
-    assert data.dtype == np.int32
+    assert np.issubdtype(data.dtype, np.int32)
     write_array(fp, data)
 
 
@@ -824,7 +824,7 @@ def read_floats(fp: SeekableBufferedReader, count: int) -> Float32NDArray:
 
 
 def write_floats(fp: SeekableBufferedWriter, data: Float32NDArray) -> None:
-    assert data.dtype == np.float32
+    assert np.issubdtype(data.dtype, np.float32)
     write_array(fp, data)
 
 

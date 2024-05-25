@@ -36,7 +36,7 @@ jobs:
     - name: Typecheck with mypy
       run: |
           mypy
-          mypy --strict ensightreader.py
+          mypy --strict --no-warn-unused-ignores ensightreader.py
     - name: Check with ruff
       run: |
         ruff check
