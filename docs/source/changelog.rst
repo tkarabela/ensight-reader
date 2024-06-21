@@ -1,7 +1,14 @@
 Changelog
 =========
 
-0.11.1 (2023-03-35)
+0.11.2 (2024-06-31)
+-------------------
+
+- Added support for .case file with quoted filenames (`Issue #6 <https://github.com/tkarabela/ensight-reader/issues/6>`_).
+- Added more context to exceptions when geometry file parsing fails.
+- Added support for NumPy 2.0+
+
+0.11.1 (2023-03-25)
 -------------------
 
 - Added a warning when .case file contains transient model or variables that do not have timeset ID defined.
