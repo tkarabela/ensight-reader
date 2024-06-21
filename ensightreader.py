@@ -27,7 +27,7 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union
+from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator
 
 import numpy as np
 import numpy.typing as npt
@@ -40,6 +40,20 @@ Float32NDArray = npt.NDArray[np.float32]
 Int32NDArray = npt.NDArray[np.int32]
 
 __version__ = "0.11.1"
+
+
+def add_exception_note(e: Exception, note: str) -> None:
+    if hasattr(e, "add_note"):  # Python 3.11+
+        e.add_note(note)
+
+
+@contextmanager
+def add_exception_note_block(note: str) -> Iterator[None]:
+    try:
+        yield
+    except Exception as e:
+        add_exception_note(e, note)
+        raise
 
 
 class EnsightReaderError(Exception):
@@ -486,32 +500,33 @@ class UnstructuredElementBlock:
         except ValueError as e:
             raise EnsightReaderError("Unexpected element type", fp) from e
 
-        number_of_elements = read_int(fp)
+        with add_exception_note_block(f"element_type = {element_type}"):
+            number_of_elements = read_int(fp)
 
-        # skip element IDs
-        if element_id_handling.ids_present:
-            fp.seek(number_of_elements*SIZE_INT, os.SEEK_CUR)
+            # skip element IDs
+            if element_id_handling.ids_present:
+                fp.seek(number_of_elements*SIZE_INT, os.SEEK_CUR)
 
-        if element_type in NODES_PER_ELEMENT:
-            nodes_per_element = NODES_PER_ELEMENT[element_type]
-            fp.seek(nodes_per_element * number_of_elements * SIZE_INT, os.SEEK_CUR)  # skip connectivity
-        elif element_type == ElementType.NSIDED:
-            polygon_node_counts = read_ints(fp, number_of_elements)
-            fp.seek(polygon_node_counts.sum() * SIZE_INT, os.SEEK_CUR)
-        elif element_type == ElementType.NFACED:
-            polyhedra_face_counts = read_ints(fp, number_of_elements)
-            face_node_counts = read_ints(fp, polyhedra_face_counts.sum())
-            fp.seek(face_node_counts.sum() * SIZE_INT, os.SEEK_CUR)  # skip connectivity
-        else:
-            raise EnsightReaderError(f"Unsupported element type: {element_type}", fp)
+            if element_type in NODES_PER_ELEMENT:
+                nodes_per_element = NODES_PER_ELEMENT[element_type]
+                fp.seek(nodes_per_element * number_of_elements * SIZE_INT, os.SEEK_CUR)  # skip connectivity
+            elif element_type == ElementType.NSIDED:
+                polygon_node_counts = read_ints(fp, number_of_elements)
+                fp.seek(polygon_node_counts.sum() * SIZE_INT, os.SEEK_CUR)
+            elif element_type == ElementType.NFACED:
+                polyhedra_face_counts = read_ints(fp, number_of_elements)
+                face_node_counts = read_ints(fp, polyhedra_face_counts.sum())
+                fp.seek(face_node_counts.sum() * SIZE_INT, os.SEEK_CUR)  # skip connectivity
+            else:
+                raise EnsightReaderError(f"Unsupported element type: {element_type}", fp)
 
-        return cls(
-            offset=offset,
-            number_of_elements=number_of_elements,
-            element_type=element_type,
-            element_id_handling=element_id_handling,
-            part_id=part_id,
-        )
+            return cls(
+                offset=offset,
+                number_of_elements=number_of_elements,
+                element_type=element_type,
+                element_id_handling=element_id_handling,
+                part_id=part_id,
+            )
 
     @staticmethod
     def write_element_block(fp: SeekableBufferedWriter, element_type: ElementType, connectivity: Int32NDArray,
@@ -728,9 +743,10 @@ class GeometryPart:
             if element_type_line.startswith("part"):
                 break  # end of this part, stop
             else:
-                element_block = UnstructuredElementBlock.from_file(fp,
-                                                                   element_id_handling=element_id_handling,
-                                                                   part_id=part_id)
+                with add_exception_note_block(f"part_id = {part_id} ({part_name})"):
+                    element_block = UnstructuredElementBlock.from_file(fp,
+                                                                       element_id_handling=element_id_handling,
+                                                                       part_id=part_id)
                 element_blocks.append(element_block)
 
         return cls(
