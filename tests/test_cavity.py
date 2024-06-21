@@ -1,17 +1,27 @@
 import os.path as op
 import tempfile
+import pytest
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
 from ensightreader import (ElementType, EnsightGeometryFile, IdHandling, VariableLocation,
                            VariableType, read_case)
 
-ENSIGHT_CASE_PATH = "./data/cavity/cavity.case"
+REPO_ROOT = op.dirname(op.dirname(__file__))
+ENSIGHT_CASE_PATH = op.join(REPO_ROOT, "./data/cavity/cavity.case")
+ENSIGHT_CASE_WITH_QUOTES_PATH = op.join(REPO_ROOT, "./data/cavity/cavity_with_quotes_in_filenames.case")
 
 
-def test_read_cavity_case(recwarn):
+@pytest.mark.parametrize(
+    "case_path",
+    [
+        ENSIGHT_CASE_PATH,
+        ENSIGHT_CASE_WITH_QUOTES_PATH,
+    ]
+)
+def test_read_cavity_case(case_path, recwarn):
     # check casefile
-    case = read_case(ENSIGHT_CASE_PATH)
+    case = read_case(case_path)
     assert len(recwarn) == 0
 
     VARIABLE_NAMES = ["U", "p"]

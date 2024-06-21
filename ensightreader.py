@@ -1452,6 +1452,10 @@ def fill_wildcard(filename: str, value: int) -> str:
     return re.sub(r"\*+", lambda m: str(value).zfill(len(m.group(0))), filename, count=1)
 
 
+def strip_quotes(filename: str) -> str:
+    return re.sub('"(.+)"', r"\1", filename)
+
+
 @dataclass
 class EnsightGeometryFileSet:
     """
@@ -1843,6 +1847,7 @@ class EnsightCaseFile:
                             values.pop()
                         if len(values) == 1:
                             filename, = values
+                            filename = strip_quotes(filename)
 
                             if "*" in filename:
                                 corrected_line = f"{key}: 1 {' '.join(values)}"
@@ -1858,6 +1863,7 @@ class EnsightCaseFile:
                                 changing_geometry_per_part=changing_geometry_per_part)
                         elif len(values) == 2:
                             ts_, filename = values
+                            filename = strip_quotes(filename)
                             geometry_model_ts = int(ts_)
                             geometry_model = EnsightGeometryFileSet(
                                 casefile_dir_path,
@@ -1885,6 +1891,7 @@ class EnsightCaseFile:
                         continue
 
                     filename = values[-1]
+                    filename = strip_quotes(filename)
                     description = values[-2]
                     ts = None
                     if len(values) == 3:
@@ -1946,9 +1953,11 @@ class EnsightCaseFile:
                         current_timeset.filename_numbers.extend(map(int, values))  # type: ignore[union-attr]
                     elif key == "filename numbers file":
                         path = op.join(casefile_dir_path, values[0])
+                        path = strip_quotes(path)
                         current_timeset.filename_numbers = read_numbers_from_text_file(path, int)  # type: ignore[union-attr]
                     elif key == "time values file":
                         path = op.join(casefile_dir_path, values[0])
+                        path = strip_quotes(path)
                         current_timeset.time_values = read_numbers_from_text_file(path, float)  # type: ignore[union-attr]
                     elif key is None:
                         if last_key == "time values":
