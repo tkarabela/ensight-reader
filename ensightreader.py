@@ -28,6 +28,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator
+import glob
 
 import numpy as np
 import numpy.typing as npt
@@ -519,7 +520,7 @@ class UnstructuredElementBlock:
                 fp.seek(face_node_counts.sum() * SIZE_INT, os.SEEK_CUR)  # skip connectivity
             else:
                 raise EnsightReaderError(f"Unsupported element type: {element_type}", fp)
-
+            
             return cls(
                 offset=offset,
                 number_of_elements=number_of_elements,
@@ -1156,6 +1157,10 @@ class EnsightVariableFile:
     part_per_node_undefined_values: Dict[int, float]
     part_per_element_undefined_values: Dict[Tuple[int, ElementType], float]
 
+    def get_location(self) -> VariableLocation:
+        """Return location of the variable"""
+        return self.variable_location
+
     def is_defined_for_part_id(self, part_id: int) -> bool:
         """Return True if variable is defined for given part, else False"""
         return part_id in self.part_offsets
@@ -1258,6 +1263,14 @@ class EnsightVariableFile:
     def from_file_path(cls, file_path: str, variable_name: str, variable_location: VariableLocation,
                        variable_type: VariableType, geofile: EnsightGeometryFile) -> "EnsightVariableFile":
         """Used internally by `EnsightVariableFileSet.get_file()`"""
+
+        # Handle wildcard pattern
+        if '*****' in file_path:
+            matched_files = glob.glob(file_path.replace('*****', '*'))
+            if not matched_files:
+                raise FileNotFoundError(f"No files matching the pattern {file_path}")
+            file_path = matched_files[0]  # Select the first matching file
+
         part_offsets = {}
 
         part_element_offsets: Dict[Tuple[int, ElementType], int] = {}
@@ -1451,10 +1464,8 @@ class EnsightVariableFile:
 def fill_wildcard(filename: str, value: int) -> str:
     return re.sub(r"\*+", lambda m: str(value).zfill(len(m.group(0))), filename, count=1)
 
-
 def strip_quotes(filename: str) -> str:
     return re.sub('"(.+)"', r"\1", filename)
-
 
 @dataclass
 class EnsightGeometryFileSet:
