@@ -42,6 +42,27 @@ Int32NDArray = npt.NDArray[np.int32]
 
 __version__ = "0.11.2"
 
+__all__ = [
+    "read_case",
+
+    "EnsightReaderError",
+    "EnsightReaderWarning",
+    "IdHandling",
+    "ChangingGeometry",
+    "VariableLocation",
+    "VariableType",
+    "ElementType",
+    "Timeset",
+    "UnstructuredElementBlock",
+    "GeometryPart",
+    "EnsightGeometryFile",
+    "EnsightVariableFile",
+    "EnsightGeometryFileSet",
+    "EnsightVariableFileSet",
+    "EnsightConstantVariable",
+    "EnsightCaseFile",
+]
+
 
 def add_exception_note(e: Exception, note: str) -> None:
     if hasattr(e, "add_note"):  # Python 3.11+
