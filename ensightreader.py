@@ -950,7 +950,7 @@ class EnsightGeometryFile:
         return None
 
     @classmethod
-    def from_file_path(cls, file_path: str, changing_geometry_per_part: bool) -> "EnsightGeometryFile":
+    def from_file_path(cls, file_path: Union[str, os.PathLike[str]], changing_geometry_per_part: bool) -> "EnsightGeometryFile":
         """Parse EnSight Gold geometry file"""
         extents = None
         parts = {}
@@ -1001,7 +1001,7 @@ class EnsightGeometryFile:
                 parts[part.part_id] = part
 
         return cls(
-            file_path=file_path,
+            file_path=str(file_path),
             description_line1=description_line1,
             description_line2=description_line2,
             node_id_handling=node_id_handling,
@@ -1255,7 +1255,7 @@ class EnsightVariableFile:
         return arr
 
     @classmethod
-    def from_file_path(cls, file_path: str, variable_name: str, variable_location: VariableLocation,
+    def from_file_path(cls, file_path: Union[str, os.PathLike[str]], variable_name: str, variable_location: VariableLocation,
                        variable_type: VariableType, geofile: EnsightGeometryFile) -> "EnsightVariableFile":
         """Used internally by `EnsightVariableFileSet.get_file()`"""
         part_offsets = {}
@@ -1347,7 +1347,7 @@ class EnsightVariableFile:
                     raise EnsightReaderError(f"Bad variable location {variable_location}", fp)
 
         return cls(
-            file_path=file_path,
+            file_path=str(file_path),
             description_line=description_line,
             variable_name=variable_name,
             variable_location=variable_location,
@@ -1555,8 +1555,12 @@ class EnsightConstantVariable:
         return self.values[timestep]
 
     @classmethod
-    def from_casefile_line(cls, key: str, values: List[str], casefile_dir_path: str) -> Tuple["EnsightConstantVariable",
-                                                                                              Optional[int]]:
+    def from_casefile_line(
+            cls,
+            key: str,
+            values: List[str],
+            casefile_dir_path: Union[str, os.PathLike[str]]
+    ) -> Tuple["EnsightConstantVariable", Optional[int]]:
         if "file" in key:
             # constant per case file
             if len(values) == 2:
@@ -1605,7 +1609,7 @@ class EnsightConstantVariable:
                 ), ts
 
 
-def read_numbers_from_text_file(path: str, type_: Type[T]) -> List[T]:
+def read_numbers_from_text_file(path: Union[str, os.PathLike[str]], type_: Type[T]) -> List[T]:
     output: List[T] = []
     with open(path) as fp:
         for line in fp:
@@ -1789,7 +1793,7 @@ class EnsightCaseFile:
         return list(self.variables.keys())
 
     @classmethod
-    def from_file(cls, casefile_path: str) -> "EnsightCaseFile":
+    def from_file(cls, casefile_path: Union[str, os.PathLike[str]]) -> "EnsightCaseFile":
         """
         Read EnSight Gold case
 
@@ -1989,7 +1993,7 @@ class EnsightCaseFile:
                     constant_variables[variable_name].timeset = timesets[variable_ts]
 
         return cls(
-            casefile_path=casefile_path,
+            casefile_path=str(casefile_path),
             geometry_model=geometry_model,
             variables=variables,
             constant_variables=constant_variables,
@@ -2081,7 +2085,7 @@ class EnsightCaseFile:
 
         return "\n".join(case_lines)
 
-    def to_file(self, casefile_path: str) -> None:
+    def to_file(self, casefile_path: Union[str, os.PathLike[str]]) -> None:
         """
         Write EnSight Gold case to file
 
@@ -2095,7 +2099,8 @@ class EnsightCaseFile:
             fp.write(text)
 
 
-def read_case(path: str) -> EnsightCaseFile:
+
+def read_case(path: Union[str, os.PathLike[str]]) -> EnsightCaseFile:
     """
     Read EnSight Gold case
 
