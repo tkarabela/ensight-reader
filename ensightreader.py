@@ -19,6 +19,7 @@
 # THE SOFTWARE.
 
 
+import io
 import mmap as _mmap
 import os
 import os.path as op
@@ -782,6 +783,99 @@ class GeometryPart:
             write_ints(fp, node_ids)
         write_floats(fp, node_coordinates.flatten("F"))
 
+    def write_part(
+            self,
+            in_fp: SeekableBufferedReader,
+            out_fp: SeekableBufferedWriter,
+            out_node_id_handling: IdHandling,
+            out_element_id_handling: IdHandling,
+            out_part_id: Optional[int] = None,
+            out_part_name: Optional[str] = None,
+    ) -> None:
+        """
+        Write part to other geometry file
+
+        Usage:
+            >>> import ensightreader, io
+
+            >>> source_case = ensightreader.read_case("source.case")
+            >>> dest_case = ensightreader.read_case("dest.case")
+
+            >>> source_geo = source_case.get_geometry_model()
+            >>> dest_geo = dest_case.get_geometry_model()
+
+            >>> source_part = source_geo.get_part_by_name("my_part")
+            >>> with source_geo.mmap() as source_mm, dest_geo.open_writeable() as dest_fp:
+            ....    dest_fp.seek(0, io.SEEK_END)
+            ....    source_part.write_part(
+            ....        source_mm,
+            ....        dest_fp,
+            ....        out_node_id_handling=dest_geo.node_id_handling,
+            ....        out_element_id_handling=dest_geo.element_id_handling,
+            ....    )
+
+        See Also:
+            `EnsightCase.append_part_geometry()` for high-level method for part copying
+
+        Args:
+            in_fp: Opened input geometry file (where this `GeometryPart` is from)
+            out_fp: Opened output geometry file seeked to the end
+            out_node_id_handling: Node ID handling of output geometry file
+            out_element_id_handling: Element ID handling of output geometry file
+            out_part_id: Write with different part ID than in input file (default: use current ID)
+            out_part_name: Write with different part name than in input file (default: use current name)
+        """
+        if out_node_id_handling.ids_present:
+            if self.node_id_handling.ids_present:
+                node_ids = self.read_node_ids(in_fp)
+            else:
+                node_ids = np.arange(self.number_of_nodes, dtype=np.int32)
+        else:
+            node_ids = None
+
+        self.write_part_header(
+            out_fp,
+            part_id=self.part_id if out_part_id is None else out_part_id,
+            part_name=self.part_name if out_part_name is None else out_part_name,
+            node_coordinates=self.read_nodes(in_fp),
+            node_ids=node_ids,
+        )
+
+        for block in self.element_blocks:
+            if out_element_id_handling.ids_present:
+                if self.element_id_handling.ids_present:
+                    element_ids = block.read_element_ids(in_fp)
+                else:
+                    element_ids = np.arange(block.number_of_elements, dtype=np.int32)
+            else:
+                element_ids = None
+
+            if block.element_type == ElementType.NSIDED:
+                polygon_node_counts, polygon_connectivity = block.read_connectivity_nsided(in_fp)
+                UnstructuredElementBlock.write_element_block_nsided(
+                    out_fp,
+                    polygon_node_counts=polygon_node_counts,
+                    polygon_connectivity=polygon_connectivity,
+                    element_ids=element_ids,
+                )
+            elif block.element_type == ElementType.NFACED:
+                polyhedra_face_counts, face_node_counts, face_connectivity = block.read_connectivity_nfaced(in_fp)
+                UnstructuredElementBlock.write_element_block_nfaced(
+                    out_fp,
+                    polyhedra_face_counts=polyhedra_face_counts,
+                    face_node_counts=face_node_counts,
+                    face_connectivity=face_connectivity,
+                    element_ids=element_ids,
+                )
+            else:
+                connectivity = block.read_connectivity(in_fp)
+                UnstructuredElementBlock.write_element_block(
+                    out_fp,
+                    element_type=block.element_type,
+                    connectivity=connectivity,
+                    element_ids=element_ids,
+                )
+
 
 def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[TNum]) -> npt.NDArray[TNum]:
     if isinstance(fp, _mmap.mmap):
@@ -1052,6 +1146,24 @@ class EnsightGeometryFile:
                 nodes = part.read_nodes(fp_geo)
         """
         return open(self.file_path, "rb")
+
+    def open_writeable(self) -> BinaryIO:
+        """
+        Return the opened file in read-write binary mode (convenience method)
+
+        Use this in ``with`` block and pass the resulting object to `GeometryPart` methods.
+
+        Usage::
+
+            with geometry_file.open_writeable() as fp_geo:
+                ...
+
+        Equivalent code::
+
+            with open(geometry_file.file_path, "r+b") as fp_geo:
+                nodes = part.read_nodes(fp_geo)
+        """
+        return open(self.file_path, "r+b")
 
     @contextmanager
     def mmap(self) -> Generator[_mmap.mmap, None, None]:
@@ -2098,6 +2210,63 @@ class EnsightCaseFile:
         with open(casefile_path, "w") as fp:
             fp.write(text)
 
+    def append_part_geometry(
+            self,
+            source_case: "EnsightCaseFile",
+            parts: List[GeometryPart],
+            timestep: int = 0
+    ) -> None:
+        """
+        Append parts from different case to this case
+
+        The parts must have names that do not occur in this case.
+        Part IDs will be assigned automatically so that they do not collide with existing parts.
+        Variable data is not copied.
+
+        Usage:
+            >>> import ensightreader
+
+            >>> source_case = ensightreader.read_case("source.case")
+            >>> dest_case = ensightreader.read_case("dest.case")
+
+            >>> source_geo = source_case.get_geometry_model()
+            >>> dest_geo = dest_case.get_geometry_model()
+
+            >>> source_part = source_geo.get_part_by_name("my_part")
+            >>> dest_case.append_part_geometry(source_case, [source_part])
+
+            >>> source_geo = source_case.get_geometry_model()  # read updated geometry file
+
+        Note:
+            Existing `EnsightGeometryFile` instances will not be updated;
+            call `EnsightCaseFile.get_geometry_model()` again to see the geometry file with newly added parts.
+
+        Args:
+            source_case: Case with geometry to be copied
+            parts: Which `GeometryPart` to copy
+            timestep: Which timestep to use (only set for transient geometry)
+
+        """
+        source_geo = source_case.get_geometry_model(timestep)
+        dest_geo = self.get_geometry_model(timestep)
+
+        highest_dest_part_id = max(dest_geo.parts.keys(), default=0)
+        for source_part in parts:
+            if dest_geo.get_part_by_name(source_part.part_name) is not None:
+                raise ValueError(f"Part with name {source_part.part_name!r} already present in destination case")
+
+        with source_geo.mmap() as source_mm, dest_geo.open_writeable() as dest_fp:
+            dest_fp.seek(0, io.SEEK_END)
+            for i, source_part in enumerate(parts, 1):
+                source_part.write_part(
+                    source_mm,
+                    dest_fp,
+                    out_node_id_handling=dest_geo.node_id_handling,
+                    out_element_id_handling=dest_geo.element_id_handling,
+                    out_part_id=highest_dest_part_id+i
+                )
+
+        self._geometry_file_cache.clear()
 
 
 def read_case(path: Union[str, os.PathLike[str]]) -> EnsightCaseFile:

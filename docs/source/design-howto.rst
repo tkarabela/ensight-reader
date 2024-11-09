@@ -225,6 +225,26 @@ Please see ``tests/test_write_geometry.py``, essentially you will need to do:
     ...     UnstructuredElementBlock.write_element_block(fp, element_type=et, connectivity=connectivity)
 
 
+Copying data from other case
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is a convenience method to append parts (geometry only) from different case:
+
+::
+
+    >>> import ensightreader
+
+    >>> source_case = ensightreader.read_case("source.case")
+    >>> dest_case = ensightreader.read_case("dest.case")
+
+    >>> source_geo = source_case.get_geometry_model()
+    >>> dest_geo = dest_case.get_geometry_model()
+
+    >>> source_part = source_geo.get_part_by_name("my_part")
+    >>> dest_case.append_part_geometry(source_case, [source_part])
+
+    >>> source_geo = source_case.get_geometry_model()  # read updated geometry file
+
 Code examples
 -------------
 

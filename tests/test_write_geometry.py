@@ -1,11 +1,16 @@
+import ensightreader
 from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case
 import numpy as np
 import tempfile
 import os.path as op
+import shutil
 
 
 ENSIGHT_CASE_PATH = "./data/cell_types/cell_types.case"
 REFERENCE_GEOFILE_PATH = "./data/cell_types/cell_types.geo"
+
+CAVITY_CASE_PATH = "./data/cavity/cavity.case"
+SPHERE_CASE_PATH = "./data/sphere/sphere.case"
 
 
 def test_create_geometry_with_every_non_ghost_cell_type():
@@ -295,3 +300,31 @@ type: ensight gold
 GEOMETRY
 model: cell_types.geo
 """.strip()
+
+
+def test_append_geometry(tmp_path):
+    cavity_dir = tmp_path / "cavity"
+    sphere_dir = tmp_path / "sphere"
+
+    shutil.copytree(op.dirname(CAVITY_CASE_PATH), cavity_dir)
+    shutil.copytree(op.dirname(SPHERE_CASE_PATH), sphere_dir)
+
+    cavity_case = ensightreader.read_case(cavity_dir / "cavity.case")
+    sphere_case = ensightreader.read_case(sphere_dir / "sphere.case")
+
+    sphere_case.append_part_geometry(cavity_case, list(cavity_case.get_geometry_model().parts.values()))
+
+    cavity_geo = cavity_case.get_geometry_model()
+    sphere_geo = sphere_case.get_geometry_model()
+
+    with cavity_geo.mmap() as cavity_mm, sphere_geo.mmap() as sphere_mm:
+        for part_name in cavity_geo.get_part_names():
+            sphere_part = sphere_geo.get_part_by_name(part_name)
+            cavity_part = cavity_geo.get_part_by_name(part_name)
+
+            assert np.array_equal(sphere_part.read_nodes(sphere_mm), cavity_part.read_nodes(cavity_mm))
+            assert sphere_part.number_of_elements == cavity_part.number_of_elements
+            for i, cavity_block in enumerate(cavity_part.element_blocks):
+                sphere_block = sphere_part.element_blocks[i]
+                assert cavity_block.number_of_elements == sphere_block.number_of_elements
+                assert cavity_block.element_type == sphere_block.element_type
