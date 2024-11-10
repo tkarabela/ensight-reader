@@ -198,6 +198,26 @@ Defining new per-case constant
     >>> case.constant_variables[constant.variable_name] = constant
     >>> case.to_file("data/sphere/sphere-with-constant.case")
 
+
+Defining new variable
+~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    >>> from ensightreader import read_case, VariableLocation, VariableType
+
+    >>> case = read_case("data/sphere/sphere.case")
+    >>> my_variable = case.define_variable(VariableLocation.PER_NODE, VariableType.VECTOR, "my_variable", "my_variable.bin")
+
+    >>> with my_variable.open_writeable() as fp:
+    ...     my_variable.ensure_data_for_all_parts(fp, default_value=0.0)
+
+    >>> with my_variable.mmap_writeable() as mm:
+    ...     part_id = 1
+    ...     arr = my_variable.read_node_data(mm, part_id)
+    ...     arr[0] = 123  # now we can modify the data array in-place to set variable values
+
+
 Changing node coordinates
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
