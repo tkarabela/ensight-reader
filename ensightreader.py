@@ -569,7 +569,7 @@ class UnstructuredElementBlock:
         write_int(fp, number_of_elements)
         if element_ids is not None:
             write_ints(fp, element_ids)
-        write_ints(fp, connectivity.flatten("C"))
+        write_ints(fp, connectivity.ravel("C"))
 
     @staticmethod
     def write_element_block_nsided(fp: SeekableBufferedWriter, polygon_node_counts: Int32NDArray,
@@ -802,7 +802,7 @@ class GeometryPart:
         write_int(fp, number_of_nodes)
         if node_ids is not None:
             write_ints(fp, node_ids)
-        write_floats(fp, node_coordinates.flatten("F"))
+        write_floats(fp, node_coordinates.ravel("F"))
 
     def write_part(
             self,
