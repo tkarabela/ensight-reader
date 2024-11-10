@@ -15,7 +15,8 @@ overhead for you, but it enables you to choose between:
 
 Depending on your use-case, using **memory-mapped I/O** can be **very
 efficient**. It also allows for **limited editing of EnSight files**
-(eg. transforming coordinates or variable values in-place).
+(eg. transforming coordinates or variable values in-place). Regular
+I/O can be used for **appending new parts and variable data**.
 
 The following code example demonstrates this feature:
 
@@ -27,10 +28,15 @@ The following code example demonstrates this feature:
     geofile = case.get_geometry_model()
     part_ids = geofile.get_part_ids()
     part = geofile.get_part_by_id(part_ids[0])
+    variable = case.get_variable("RTData")
 
-    # (1) traditional I/O
+    # (1.1) read-only traditional I/O
     with geofile.open() as fp_geo:
         nodes = part.read_nodes(fp_geo)  # owned buffer
+
+    # (1.2) read-write traditional I/O
+    with variable.open_writable() as fp_var:
+        variable.ensure_data_for_part(fp_var, part.part_id, 0.0)  # append array with default value if needed
 
     # (2.1) read-only memory-mapped I/O
     with geofile.mmap() as mm_geo:
@@ -228,7 +234,7 @@ Please see ``tests/test_write_geometry.py``, essentially you will need to do:
 Copying data from other case
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-There is a convenience method to append parts (geometry only) from different case:
+There are convenience methods to append part geometry and variable data from a different case:
 
 ::
 
@@ -242,8 +248,8 @@ There is a convenience method to append parts (geometry only) from different cas
 
     >>> source_part = source_geo.get_part_by_name("my_part")
     >>> dest_case.append_part_geometry(source_case, [source_part])
+    >>> dest_case.copy_part_variables(source_case, [source_part], ["velocity", "pressure"])
 
-    >>> source_geo = source_case.get_geometry_model()  # read updated geometry file
 
 Code examples
 -------------
@@ -252,6 +258,9 @@ The library comes with scripts that use it to convert EnSight Gold into
 other data formats. These are mostly useful for reference as they
 output data in text format, making them unsuitable for production use
 with large models.
+
+.. tip::
+    See the ``tests/`` directory in the repository for more code examples.
 
 .. automodule:: ensight2obj
     :members:

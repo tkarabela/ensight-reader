@@ -1,3 +1,5 @@
+import pytest
+
 import ensightreader
 from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case
 import numpy as np
@@ -312,10 +314,10 @@ def test_append_geometry(tmp_path):
     cavity_case = ensightreader.read_case(cavity_dir / "cavity.case")
     sphere_case = ensightreader.read_case(sphere_dir / "sphere.case")
 
-    sphere_case.append_part_geometry(cavity_case, list(cavity_case.get_geometry_model().parts.values()))
-
     cavity_geo = cavity_case.get_geometry_model()
     sphere_geo = sphere_case.get_geometry_model()
+
+    sphere_case.append_part_geometry(cavity_case, list(cavity_geo.parts.values()))
 
     with cavity_geo.mmap() as cavity_mm, sphere_geo.mmap() as sphere_mm:
         for part_name in cavity_geo.get_part_names():
@@ -328,3 +330,24 @@ def test_append_geometry(tmp_path):
                 sphere_block = sphere_part.element_blocks[i]
                 assert cavity_block.number_of_elements == sphere_block.number_of_elements
                 assert cavity_block.element_type == sphere_block.element_type
+
+
+@pytest.mark.parametrize(
+    "source_case_path,dest_case_path",
+    [
+        (CAVITY_CASE_PATH, SPHERE_CASE_PATH),
+        (SPHERE_CASE_PATH, CAVITY_CASE_PATH),
+    ]
+)
+def test_append_geometry_and_variables(tmp_path, source_case_path, dest_case_path):
+    source_dir = tmp_path / "source"
+    dest_dir = tmp_path / "dest"
+
+    shutil.copytree(op.dirname(source_case_path), source_dir)
+    shutil.copytree(op.dirname(dest_case_path), dest_dir)
+
+    source_case = ensightreader.read_case(op.join(source_dir, op.basename(source_case_path)))
+    dest_case = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
+
+    dest_case.append_part_geometry(source_case, list(source_case.get_geometry_model().parts.values()))
+    dest_case.copy_part_variables(source_case, list(source_case.get_geometry_model().parts.values()), source_case.get_variables())
