@@ -1042,6 +1042,24 @@ class EnsightGeometryFile:
     parts: Dict[int, GeometryPart]  # part ID -> GeometryPart
     changing_geometry_per_part: bool
 
+    def reload_from_file(self) -> None:
+        """
+        Parse file again and update internal metadata
+
+        This is meant to be called after writing to the geometry file, to see the changes.
+        """
+        geofile = self.from_file_path(
+            file_path=self.file_path,
+            changing_geometry_per_part=self.changing_geometry_per_part,
+        )
+
+        self.description_line1 = geofile.description_line1
+        self.description_line2 = geofile.description_line2
+        self.node_id_handling = geofile.node_id_handling
+        self.element_id_handling = geofile.element_id_handling
+        self.extents = geofile.extents
+        self.parts = geofile.parts
+
     def get_part_names(self) -> List[str]:
         """Return list of part names"""
         return [part.part_name for part in self.parts.values()]
@@ -2256,12 +2274,6 @@ class EnsightCaseFile:
             >>> source_part = source_geo.get_part_by_name("my_part")
             >>> dest_case.append_part_geometry(source_case, [source_part])
 
-            >>> source_geo = source_case.get_geometry_model()  # read updated geometry file
-
-        Note:
-            Existing `EnsightGeometryFile` instances will not be updated;
-            call `EnsightCaseFile.get_geometry_model()` again to see the geometry file with newly added parts.
-
         Args:
             source_case: Case with geometry to be copied
             parts: Which `GeometryPart` to copy
@@ -2287,7 +2299,7 @@ class EnsightCaseFile:
                     out_part_id=highest_dest_part_id+i
                 )
 
-        self._geometry_file_cache.clear()
+        dest_geo.reload_from_file()
 
 
 def read_case(path: Union[str, os.PathLike[str]]) -> EnsightCaseFile:
