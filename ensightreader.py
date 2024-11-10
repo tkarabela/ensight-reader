@@ -2538,7 +2538,7 @@ class EnsightCaseFile:
             filename: str,
     ) -> EnsightVariableFile:
         """
-        Add new variable to case
+        Add new variable to case and save updated .case file
 
         This will add new non-transient variable that is not defined for any part.
 
@@ -2592,6 +2592,8 @@ class EnsightCaseFile:
             filename=filename,
         )
         self.variables[variable_name] = variable_fileset
+
+        self.to_file(self.casefile_path)
 
         return self.get_variable(variable_name)
 

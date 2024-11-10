@@ -348,6 +348,10 @@ def test_append_geometry_and_variables(tmp_path, source_case_path, dest_case_pat
 
     source_case = ensightreader.read_case(op.join(source_dir, op.basename(source_case_path)))
     dest_case = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
+    dest_case_original_variables = dest_case.get_variables()
 
     dest_case.append_part_geometry(source_case, list(source_case.get_geometry_model().parts.values()))
     dest_case.copy_part_variables(source_case, list(source_case.get_geometry_model().parts.values()), source_case.get_variables())
+
+    dest_case2 = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
+    assert set(dest_case2.get_variables()) == set(dest_case_original_variables) | set(source_case.get_variables())
