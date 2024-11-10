@@ -1050,6 +1050,8 @@ class EnsightGeometryFile:
         Parse file again and update internal metadata
 
         This is meant to be called after writing to the geometry file, to see the changes.
+
+        Be sure to flush your writes before calling this method.
         """
         geofile = self.from_file_path(
             file_path=self.file_path,
@@ -1315,6 +1317,8 @@ class EnsightVariableFile:
         Parse file again and update internal metadata
 
         This is meant to be called after writing to the variable file, to see the changes.
+
+        Be sure to flush your writes before calling this method.
         """
         variable = self.from_file_path(
             file_path=self.file_path,
@@ -1600,18 +1604,21 @@ class EnsightVariableFile:
             self,
             fp: BinaryIO,
             part_id: int,
-            default_value: float = 0.0
+            default_value: float = 0.0,
+            _reload_from_file: bool = True,
     ) -> None:
         """
         Append variable definition for given part if variable is undefined currently, otherwise do nothing
 
         This method will seek to the end of the file automatically.
 
+        See Also:
+            `EnsightVariableFile.ensure_data_for_all_parts()`
+
         Args:
             fp: Opened writable variable file (use `EnsightVariableFile.open_writeable()`, not mmap)
             part_id: Part ID to be defined
             default_value: Constant value that will be filled in if the variable is not defined
-
         """
         if self.is_defined_for_part_id(part_id):
             return
@@ -1632,6 +1639,37 @@ class EnsightVariableFile:
             self.write_element_data(fp, part_id, arr_per_element)
         else:
             raise NotImplementedError("unexpected variable location")
+
+        if _reload_from_file:
+            fp.flush()
+            self.reload_from_file()
+
+    def ensure_data_for_all_parts(self, fp: BinaryIO, default_value: float = 0.0) -> None:
+        """
+        Append variable definitions for all parts that are currently undefined
+
+        This method will seek to the end of the file automatically.
+
+        Usage:
+            >>> from ensightreader import read_case
+            >>> case = read_case("sphere.case")
+            >>> variable = case.get_variable("RTData")
+            >>> with variable.open_writeable() as fp:
+            ...     variable.ensure_data_for_all_parts(fp)
+
+        See Also:
+            `EnsightVariableFile.ensure_data_for_part()`
+
+        Args:
+            fp: Opened writable variable file (use `EnsightVariableFile.open_writeable()`, not mmap)
+            default_value: Constant value that will be filled in if the variable is not defined
+
+        """
+        for part_id in self.geometry_file.get_part_ids():
+            self.ensure_data_for_part(fp, part_id, default_value, _reload_from_file=False)
+
+        fp.flush()
+        self.reload_from_file()
 
     def open(self) -> BinaryIO:
         """
@@ -2555,6 +2593,9 @@ class EnsightCaseFile:
 
         Returns:
             `EnsightVariableFile` for the new variable
+
+        See Also:
+            `EnsightVariableFile.ensure_data_for_all_parts()`
         """
         if variable_name in self.variables:
             raise ValueError(f"Variable with name {variable_name!r} is already present in case")

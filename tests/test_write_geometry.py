@@ -1,7 +1,10 @@
+import itertools
+
 import pytest
 
 import ensightreader
-from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case
+from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case, \
+    VariableLocation, VariableType
 import numpy as np
 import tempfile
 import os.path as op
@@ -355,3 +358,38 @@ def test_append_geometry_and_variables(tmp_path, source_case_path, dest_case_pat
 
     dest_case2 = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
     assert set(dest_case2.get_variables()) == set(dest_case_original_variables) | set(source_case.get_variables())
+
+
+@pytest.mark.parametrize(
+    "variable_type, variable_location",
+    itertools.product(
+        [VariableType.SCALAR, VariableType.VECTOR, VariableType.TENSOR_SYMM, VariableType.TENSOR_ASYM],
+        [VariableLocation.PER_NODE, VariableLocation.PER_ELEMENT],
+    )
+)
+def test_ensure_data(tmp_path, variable_type: VariableType, variable_location: VariableLocation):
+    case_dir = tmp_path / "cavity"
+    shutil.copytree(op.dirname(CAVITY_CASE_PATH), case_dir)
+    case = ensightreader.read_case(op.join(case_dir, op.basename(CAVITY_CASE_PATH)))
+    my_variable = case.define_variable(
+        variable_location,
+        variable_type,
+        "my_variable",
+        "my_variable.bin"
+    )
+    with my_variable.open_writeable() as fp:
+        my_variable.ensure_data_for_all_parts(fp, 3.14)
+
+    with my_variable.mmap() as mm:
+        for part_id in case.get_geometry_model().get_part_ids():
+            part = case.get_geometry_model().get_part_by_id(part_id)
+            assert part is not None
+            if variable_location == VariableLocation.PER_NODE:
+                arr = my_variable.read_node_data(mm, part_id)
+                assert arr is not None
+                assert all(np.isclose(x, 3.14) for x in arr.flat)
+            else:
+                for block in part.element_blocks:
+                    arr = my_variable.read_element_data(mm, part_id, block.element_type)
+                    assert arr is not None
+                    assert all(np.isclose(x, 3.14) for x in arr.flat)
