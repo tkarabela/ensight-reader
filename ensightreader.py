@@ -2361,6 +2361,39 @@ class EnsightCaseFile:
             timesets=timesets,
         )
 
+    @classmethod
+    def create_empty_case(cls, path: Union[str, os.PathLike[str]], geofile_name: Optional[str] = None) -> "EnsightCaseFile":
+        """
+        Create new .case file and geometry file
+
+        This creates empty non-transient case with no parts or variables.
+
+        Args:
+            path: Path to .case file to be created
+            geofile_name: If given, this filename will be used for newly created geometry file.
+                Otherwise the filename is derived from casename, replacing ``.case`` with ``.geo``.
+
+        Returns:
+            `EnsightCaseFile` instance
+
+        """
+        if geofile_name is None:
+            geofile_name = f"{op.splitext(op.basename(path))[0]}.geo"
+
+        geofile_path = op.join(op.dirname(path), geofile_name)
+
+        with open(path, "w") as fp:
+            print("FORMAT", file=fp)
+            print("type: ensight gold", file=fp)
+            print(file=fp)
+            print("GEOMETRY", file=fp)
+            print(f"model: {geofile_name}", file=fp)
+
+        with open(geofile_path, "wb") as fp:
+            EnsightGeometryFile.write_header(fp)
+
+        return cls.from_file(path)
+
     def to_string(self) -> str:
         """
         Return .case file contents as a string

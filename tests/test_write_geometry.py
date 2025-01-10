@@ -4,7 +4,7 @@ import pytest
 
 import ensightreader
 from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case, \
-    VariableLocation, VariableType
+    VariableLocation, VariableType, EnsightCaseFile
 import numpy as np
 import tempfile
 import os.path as op
@@ -393,3 +393,9 @@ def test_ensure_data(tmp_path, variable_type: VariableType, variable_location: V
                     arr = my_variable.read_element_data(mm, part_id, block.element_type)
                     assert arr is not None
                     assert all(np.isclose(x, 3.14) for x in arr.flat)
+
+
+def test_create_empty_case(tmp_path):
+    case_path = tmp_path / "test.case"
+    EnsightCaseFile.create_empty_case(case_path)
+    EnsightCaseFile.from_file(case_path)
