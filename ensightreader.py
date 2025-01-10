@@ -115,17 +115,28 @@ class EnsightReaderWarning(Warning):
         file_lineno (int): line number of the error (this only applies to errors in ``*.case`` file,
             as other files are binary)
     """
-    def __init__(self, msg: str, fp: Optional[Union[TextIO, SeekableBufferedReader]] = None, lineno: Optional[int] = None):
-        self.file_path = getattr(fp, "name", None)
+    def __init__(
+            self,
+            msg: str,
+            fp: Optional[Union[TextIO, SeekableBufferedReader]] = None,
+            lineno: Optional[int] = None,
+            file_path: Optional[str] = None
+    ):
+        self.file_path = file_path if file_path is not None else getattr(fp, "name", None)
         try:
             self.file_offset = fp.tell() if fp else None
         except OSError:
             self.file_offset = None
         self.file_lineno = lineno
-        if lineno is not None:
-            message = f"{msg} (path={self.file_path}, line={self.file_lineno})"
+        if self.file_path is None:
+            message = msg
         else:
-            message = f"{msg} (path={self.file_path}, offset={self.file_offset})"
+            if self.file_lineno is not None:
+                message = f"{msg} (path={self.file_path}, line={self.file_lineno})"
+            elif self.file_offset is not None:
+                message = f"{msg} (path={self.file_path}, offset={self.file_offset})"
+            else:
+                message = f"{msg} (path={self.file_path})"
         super(EnsightReaderWarning, self).__init__(message)
 
 
@@ -2314,15 +2325,33 @@ class EnsightCaseFile:
                 raise EnsightReaderError("No model defined in casefile", fp)
 
         # propagate timesets to geometry and variables
+        default_ts = min(timesets.keys(), default=None)
+
+        if geometry_model_ts is None and "*" in geometry_model.filename and default_ts is not None:
+            warnings.warn(EnsightReaderWarning(
+                f"Geometry model looks transient, but no timeset is given - assuming it uses timeset {default_ts}",
+                file_path=casefile_path
+            ))
+            geometry_model_ts = default_ts
+
         if geometry_model_ts is not None:
             geometry_model.timeset = timesets[geometry_model_ts]
 
         for variable_name, variable_ts in variables_ts.items():
-            if variable_ts is not None:
-                if variable_name in variables:
-                    variables[variable_name].timeset = timesets[variable_ts]
-                elif variable_name in constant_variables:
-                    constant_variables[variable_name].timeset = timesets[variable_ts]
+            if variable_name in variables:
+                variable = variables[variable_name]
+                if variable_ts is None and "*" in variable.filename:
+                    warnings.warn(EnsightReaderWarning(
+                        f"Variable {variable_name} looks transient, but no timeset is given - assuming it uses timeset {default_ts}",
+                        file_path=casefile_path
+                    ))
+                    variable_ts = default_ts
+                if variable_ts is not None:
+                    variable.timeset = timesets[variable_ts]
+            elif variable_name in constant_variables:
+                constant_variable = constant_variables[variable_name]
+                if variable_ts is not None:
+                    constant_variable.timeset = timesets[variable_ts]
 
         return cls(
             casefile_path=str(casefile_path),
