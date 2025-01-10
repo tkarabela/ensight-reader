@@ -28,7 +28,7 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator
+from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator, Mapping
 
 import numpy as np
 import numpy.typing as npt
@@ -120,7 +120,7 @@ class EnsightReaderWarning(Warning):
             msg: str,
             fp: Optional[Union[TextIO, SeekableBufferedReader]] = None,
             lineno: Optional[int] = None,
-            file_path: Optional[str] = None
+            file_path: Optional[Union[str, os.PathLike[str]]] = None
     ):
         self.file_path = file_path if file_path is not None else getattr(fp, "name", None)
         try:
@@ -1587,7 +1587,7 @@ class EnsightVariableFile:
             self,
             fp: BinaryIO,
             part_id: int,
-            arr_per_element: Dict[ElementType, Float32NDArray],
+            arr_per_element: Mapping[ElementType, Float32NDArray],
     ) -> None:
         """Write variable data for part (per-element)"""
         part = self.geometry_file.parts[part_id]
