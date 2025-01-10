@@ -21,7 +21,7 @@ import ensightreader  # noqa: F401
 # -- Project information -----------------------------------------------------
 
 project = 'ensight-reader'
-copyright = '2022-2024, Tomas Karabela'
+copyright = '2022-2025, Tomas Karabela'
 author = 'Tomas Karabela'
 
 
