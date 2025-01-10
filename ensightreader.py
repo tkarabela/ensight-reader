@@ -1119,14 +1119,15 @@ class EnsightGeometryFile:
             else:
                 raise EnsightReaderError("Unexpected 'element id' line", fp)
 
-            tmp = peek_line(fp)
-            if tmp.startswith("extents"):
-                _ = read_line(fp)  # 'extents' line
-                extents = read_floats(fp, 6)
-            elif tmp.startswith("part"):
-                pass  # expected, we can start reading parts
-            else:
-                raise EnsightReaderError("Expected 'extents' or 'part' line", fp)
+            if fp.tell() != file_len:
+                tmp = peek_line(fp)
+                if tmp.startswith("extents"):
+                    _ = read_line(fp)  # 'extents' line
+                    extents = read_floats(fp, 6)
+                elif tmp.startswith("part"):
+                    pass  # expected, we can start reading parts
+                else:
+                    raise EnsightReaderError("Expected 'extents' or 'part' line", fp)
 
             # read parts
             while fp.tell() != file_len:
