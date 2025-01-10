@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.12.0 (2025-01-10)
+-------------------
+
+- Added methods for creating case from scratch, writing variable data, copying geometry and variable data from another case
+- Fixed crash when reading empty geometry file
+- Fixed reading case file with geometry/variables that have placeholders in filename but do not explicitly define timeset
+- Added support for Python 3.13
+
 0.11.2 (2024-06-31)
 -------------------
 
