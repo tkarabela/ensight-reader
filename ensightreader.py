@@ -40,7 +40,7 @@ SeekableBufferedWriter = Union[BinaryIO, _mmap.mmap]
 Float32NDArray = npt.NDArray[np.float32]
 Int32NDArray = npt.NDArray[np.int32]
 
-__version__ = "0.12.0"
+__version__ = "0.12.1"
 
 __all__ = [
     "read_case",
@@ -2599,7 +2599,7 @@ class EnsightCaseFile:
                     source_variable.variable_location,
                     source_variable.variable_type,
                     variable_name,
-                    variable_name
+                    op.basename(source_variable.file_path)
                 )
 
             # [*] first, append any undefined parts to the variable file (this cannot be done via mmap_writable!)
