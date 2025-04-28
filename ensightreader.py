@@ -2281,6 +2281,7 @@ class EnsightCaseFile:
                     elif key == "filename start number":
                         current_timeset_file_start_number = int(values[0])
                         if current_timeset_file_start_number is not None and current_timeset_filename_increment is not None:
+                            assert current_timeset is not None, "'filename start number' line should come after 'time set' line"
                             current_timeset.filename_numbers = Timeset.filename_numbers_from_arithmetic_sequence(
                                 file_start_number=current_timeset_file_start_number,
                                 number_of_steps=current_timeset.number_of_steps,
