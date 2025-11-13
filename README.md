@@ -21,7 +21,7 @@ from the VTK library ([see docs for comparison](https://ensight-reader.readthedo
 ### Requirements
 
 - Python 3.9+
-- NumPy 1.21+
+- NumPy 1.22+
 
 ### Installation
 

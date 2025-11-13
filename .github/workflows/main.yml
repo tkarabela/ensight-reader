@@ -24,9 +24,9 @@ jobs:
         numpy-version: ["numpy"]
         include:
           - python-version: "3.9"
-            numpy-version: "numpy~=1.21.0"
+            numpy-version: "numpy~=1.22.0"
           - python-version: "3.10"
-            numpy-version: "numpy~=1.21.0"
+            numpy-version: "numpy~=1.22.0"
           - python-version: "3.11"
             numpy-version: "numpy~=1.22.0"
           - python-version: "3.12"
