@@ -1959,7 +1959,7 @@ class EnsightVariableFile:
             >>> class MyVariableVisitor(ensightreader.VariableVisitor):
             ...     pass  # your implementation
             >>> case = read_case("my.case")
-            >>> case.get_variable("pressure").visit(MyVariableVisitor(), case.get_geometry_model())
+            >>> case.get_variable("pressure").visit(MyVariableVisitor())
         """
         if not visitor.visit_variable(self.variable_location, self.variable_type, self.variable_name):
             return
@@ -2062,8 +2062,9 @@ class EnsightVariableFileSet:
     variable_type: VariableType
     variable_name: str
     filename: str
+    geometry_model: EnsightGeometryFileSet
 
-    def get_file(self, geofile: EnsightGeometryFile, timestep: int = 0) -> EnsightVariableFile:
+    def get_file(self, timestep: int = 0, geofile: Optional[EnsightGeometryFile] = None) -> EnsightVariableFile:
         """
         Return variable for given timestep (use 0 if not transient)
 
@@ -2077,6 +2078,8 @@ class EnsightVariableFileSet:
             nodes, etc.
 
         """
+        geofile_ = geofile if geofile is not None else self.get_geofile_for_timestep(timestep)
+
         # XXX be sure to match geofile and timestep!
         if self.timeset is None:
             timestep_filename = self.filename
@@ -2086,23 +2089,33 @@ class EnsightVariableFileSet:
         path = op.join(self.casefile_dir_path, timestep_filename)
         return EnsightVariableFile.from_file_path(path, variable_name=self.variable_name,
                                                   variable_location=self.variable_location,
-                                                  variable_type=self.variable_type, geofile=geofile)
+                                                  variable_type=self.variable_type, geofile=geofile_)
+
+    def get_geofile_for_timestep(self, timestep: int = 0) -> EnsightGeometryFile:
+        variable_ts = self.timeset
+        geometry_ts = self.geometry_model.timeset
+
+        if variable_ts is not None and geometry_ts is not None and variable_ts.timeset_id != geometry_ts.timeset_id:
+            raise ValueError("variable and geometry timesets differ, must provide explicit geofile parameter")
+        elif geometry_ts is not None:
+            return self.geometry_model.get_file(timestep)
+        else:
+            return self.geometry_model.get_file()
 
     def get_timestep_ids(self) -> Sequence[int]:
         return self.timeset.get_timestep_ids() if self.timeset is not None else [0]
 
-    def affine_transform(self, m: Float32NDArray, geometry_model: EnsightGeometryFileSet) -> None:
+    def affine_transform(self, m: Float32NDArray) -> None:
         """
         Apply affine transformation
 
         Args:
             m: 4x4 affine transformation matrix
-            geometry_model: EnsightGeometryFileSet for the case
 
         """
-        self.visit(_AffineTransformVariableVisitor(m), geometry_model)
+        self.visit(_AffineTransformVariableVisitor(m))
 
-    def visit(self, visitor: VariableVisitor, geometry_model: EnsightGeometryFileSet) -> None:
+    def visit(self, visitor: VariableVisitor) -> None:
         """
         Apply a `VariableVisitor` to all part data in all timesteps
 
@@ -2111,32 +2124,14 @@ class EnsightVariableFileSet:
             >>> class MyVariableVisitor(ensightreader.VariableVisitor):
             ...     pass  # your implementation
             >>> case = read_case("my.case")
-            >>> case.variables["pressure"].visit(MyVariableVisitor(), case.geometry_model)
+            >>> case.variables["pressure"].visit(MyVariableVisitor())
         """
         if not visitor.visit_variable(self.variable_location, self.variable_type, self.variable_name):
             return
 
-        variable_ts = self.timeset
-        geometry_ts = geometry_model.timeset
-
-        if variable_ts is None:
-            # steady variable
-            geofile = geometry_model.get_file()
-            self.get_file(geofile).visit(visitor, geofile)
-        else:
-            if geometry_ts is None:
-                # transient variable, steady geometry
-                geofile = geometry_model.get_file()
-                for i in self.get_timestep_ids():
-                    self.get_file(geofile, i).visit(visitor, geofile)
-            else:
-                # transient variable, transient geometry
-                if variable_ts.timeset_id != geometry_ts.timeset_id:
-                    raise EnsightReaderError(f"Geometry and variable {self.variable_name!r} use different timesets")
-
-                for i in self.get_timestep_ids():
-                    geofile = geometry_model.get_file(i)
-                    self.get_file(geofile, i).visit(visitor, geofile)
+        for i in self.get_timestep_ids():
+            geofile = self.get_geofile_for_timestep(i)
+            self.get_file(i).visit(visitor, geofile)
 
 
 @dataclass
@@ -2324,8 +2319,7 @@ class EnsightCaseFile:
                                               f"this is currently not handled (if you want this, please call "
                                               f"EnsightVariableFileSet.get_file() with the correct geofile)")
 
-            geofile = self.get_geometry_model(timestep)
-            self._variable_file_cache[cache_key] = self.variables[name].get_file(geofile=geofile, timestep=timestep)
+            self._variable_file_cache[cache_key] = self.variables[name].get_file(timestep=timestep)
         return self._variable_file_cache[cache_key]
 
     def get_constant_variable_value(self, name: str, timestep: int = 0) -> float:
@@ -2414,6 +2408,7 @@ class EnsightCaseFile:
         """
         casefile_dir_path = op.dirname(casefile_path)
         geometry_model = None
+        dummy_geometry_model = EnsightGeometryFileSet("dummy", None, "dummy")
         geometry_model_ts: Optional[int] = None
         variables: Dict[str, EnsightVariableFileSet] = {}
         constant_variables: Dict[str, EnsightConstantVariable] = {}
@@ -2522,7 +2517,8 @@ class EnsightCaseFile:
                                                                     variable_location=variable_location,
                                                                     variable_type=variable_type,
                                                                     variable_name=description,
-                                                                    filename=filename)
+                                                                    filename=filename,
+                                                                    geometry_model=dummy_geometry_model)  # added later
                     variables_ts[description] = ts
 
                 elif current_section == "TIME":
@@ -2616,6 +2612,10 @@ class EnsightCaseFile:
                 constant_variable = constant_variables[variable_name]
                 if variable_ts is not None:
                     constant_variable.timeset = timesets[variable_ts]
+
+        # propagate geometry model to variables
+        for variable in variables.values():
+            variable.geometry_model = geometry_model
 
         return cls(
             casefile_path=str(casefile_path),
@@ -2970,6 +2970,7 @@ class EnsightCaseFile:
             variable_type=variable_type,
             variable_name=variable_name,
             filename=filename,
+            geometry_model=self.geometry_model,
         )
         self.variables[variable_name] = variable_fileset
 
@@ -2994,7 +2995,7 @@ class EnsightCaseFile:
             self.geometry_model.visit(_AffineTransformGeometryVisitor(m))
         if variables:
             for variable in self.variables.values():
-                variable.visit(_AffineTransformVariableVisitor(m), self.geometry_model)
+                variable.visit(_AffineTransformVariableVisitor(m))
 
 
 def read_case(path: Union[str, os.PathLike[str]]) -> EnsightCaseFile:

@@ -177,7 +177,7 @@ Using the visitor pattern:
     ...         data_arr[:] *= 2
 
     >>> case = ensightreader.read_case("data/sphere/sphere.case")
-    >>> case.variables["RTData"].visit(MyVariableVisitor(), case.geometry_model)
+    >>> case.variables["RTData"].visit(MyVariableVisitor())
 
 Manually:
 
