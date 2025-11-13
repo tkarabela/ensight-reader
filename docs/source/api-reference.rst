@@ -17,7 +17,8 @@ Case file
     :members:
 .. autoclass:: Timeset
     :members:
-
+.. autoclass:: EnsightConstantVariable
+    :members:
 
 Geometry file
 -------------
@@ -28,14 +29,16 @@ Geometry file
     :members:
 .. autoclass:: UnstructuredElementBlock
     :members:
-
+.. autoclass:: GeometryVisitor
+    :members:
 
 Variable file
 -------------
 
 .. autoclass:: EnsightVariableFile
     :members:
-
+.. autoclass:: VariableVisitor
+    :members:
 
 Enum types
 ----------
@@ -60,3 +63,8 @@ Exceptions and warnings
 
 .. autoclass:: EnsightReaderWarning
     :members:
+
+Miscellaneous
+-------------
+
+.. autofunction:: apply_affine_transform

@@ -28,7 +28,8 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator, Mapping
+from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator, Mapping, \
+    Sequence, Iterable
 
 import numpy as np
 import numpy.typing as npt
@@ -156,7 +157,7 @@ class IdHandling(Enum):
     @property
     def ids_present(self) -> bool:
         """Return True if IDs are present in geometry file, otherwise False"""
-        return self in (self.GIVEN, self.IGNORE)  # type: ignore[comparison-overlap]
+        return self in (self.GIVEN, self.IGNORE)
 
     def __str__(self) -> str:
         return self.value
@@ -203,6 +204,15 @@ class VariableType(Enum):
     TENSOR_ASYM = "tensor asym"
     # COMPLEX_SCALAR = "complex scalar"
     # COMPLEX_VECTOR = "complex vector"
+
+    def can_affine_transform(self) -> bool:
+        if self == self.SCALAR:
+            return False
+        elif self == self.VECTOR:
+            return True
+        else:
+            warnings.warn(EnsightReaderWarning("affine_transform is only implemented for vectors, not tensors"))
+            return False
 
     def __str__(self) -> str:
         return self.value
@@ -341,6 +351,79 @@ DIMENSION_PER_ELEMENT = {
 SIZE_INT = SIZE_FLOAT = 4
 
 
+class GeometryVisitor:
+    """
+    Base class for a visitor that visits part geometry
+
+    This class represents the visitor pattern. `GeometryVisitor.visit_part()` will be called
+    for all parts, and you can then inspect or modify part geometry data in your overridden method.
+    """
+    def is_read_only(self) -> bool:
+        """Controls write-ability of the array parameter in `GeometryVisitor.visit_part()` (default: writeable)"""
+        return False
+
+    def visit_part(self, coordinates_arr: Float32NDArray, part: "GeometryPart") -> None:
+        """
+        Visit part coordinates data (override this method with your custom code)
+
+        Args:
+            coordinates_arr: Node coordinates given part, see `GeometryPart.read_nodes()`.
+            part: Part info.
+        """
+        return
+
+
+class VariableVisitor:
+    """
+    Base class for a visitor that visits variable data for parts
+
+    This class represents the visitor pattern. `VariableVisitor.visit_part()` will be called
+    for all parts (unless `VariableVisitor.visit_variable()` returns False), and you can then
+    inspect or modify the variable data in your overridden method.
+    """
+    def is_read_only(self) -> bool:
+        """Controls write-ability of the array parameter in `VariableVisitor.visit_part()` (default: writeable)"""
+        return False
+
+    def visit_variable(self, variable_location: VariableLocation, variable_type: VariableType, variable_name: str) -> bool:
+        """Return False here if you do not wish to visit parts in given variable (default: True, ie. visit)"""
+        return True
+
+    def visit_part(self, data_arr: Float32NDArray, part: "GeometryPart", variable: "EnsightVariableFile") -> None:
+        """
+        Visit part variable data (override this method with your custom code)
+
+        Args:
+            data_arr: Variable data for given part, see `EnsightVariableFile.read_node_data()` and
+                `EnsightVariableFile.read_element_data()`. For per-element variables, each element type is visited
+                separately.
+            part: Part info.
+            variable: Variable file.
+        """
+        return
+
+
+class _AffineTransformGeometryVisitor(GeometryVisitor):
+    """Geometry visitor implementing an affine transformation"""
+    def __init__(self, m: Float32NDArray) -> None:
+        self.m = m
+
+    def visit_part(self, coordinates_arr: Float32NDArray, part: "GeometryPart") -> None:
+        apply_affine_transform(coordinates_arr, self.m)
+
+
+class _AffineTransformVariableVisitor(VariableVisitor):
+    """Variable visitor implementing an affine transformation"""
+    def __init__(self, m: Float32NDArray) -> None:
+        self.m = m
+
+    def visit_variable(self, variable_location: VariableLocation, variable_type: VariableType, variable_name: str) -> bool:
+        return variable_type.can_affine_transform()
+
+    def visit_part(self, data_arr: Float32NDArray, part: "GeometryPart", variable: "EnsightVariableFile") -> None:
+        apply_affine_transform(data_arr, self.m, translate=False)
+
+
 @dataclass
 class Timeset:
     """
@@ -362,6 +445,9 @@ class Timeset:
     number_of_steps: int
     filename_numbers: List[int]
     time_values: List[float]
+
+    def get_timestep_ids(self) -> Sequence[int]:
+        return range(self.number_of_steps)
 
     @staticmethod
     def filename_numbers_from_arithmetic_sequence(file_start_number: int, number_of_steps: int, filename_increment: int) -> List[int]:
@@ -930,7 +1016,7 @@ def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[TNum]) -> npt
         else:
             # For read-only memory-mapped access, we want to wrap `bytes` as returned from the mmap;
             # this results in non-writeable `ndarray`.
-            arr = np.frombuffer(buffer, dtype=dtype)  # type: ignore[no-untyped-call]
+            arr = np.frombuffer(buffer, dtype=dtype)
             return arr
     else:
         # For regular file access, we allocate buffer first and then read into it,
@@ -1019,6 +1105,34 @@ def write_line(fp: SeekableBufferedWriter, s: Union[str, bytes]) -> None:
     write_string(fp, data)
 
 
+def apply_affine_transform(arr: Float32NDArray, m: Float32NDArray, translate: bool = True) -> None:
+    """
+    Do in-place affine transformation of given array of shape (n, 3) using given matrix
+
+    Expected shape of the matrix is::
+
+        [[r00, r01, r02, 0],
+         [r10, r11, r12, 0],
+         [r20, r21, r22, 0],
+         [dx,  dy,  dz,  1]]
+
+    The performed operations are: ``arr.dot(m[:3][:3])`` and ``arr += m[3, :3]``.
+
+    Args:
+        arr: Input data to be transformed
+        m: A 4x4 affine transformation matrix
+        translate: Whether to apply translation (defaults to True)
+    """
+    rot_matrix = m[:3, :3]
+    translation_vector = m[3, :3]
+
+    if np.count_nonzero(rot_matrix - np.eye(3)) > 0:
+        arr[:] = arr.dot(rot_matrix)
+
+    if translate and np.count_nonzero(translation_vector) > 0:
+        arr[:] += translation_vector
+
+
 @dataclass
 class EnsightGeometryFile:
     """
@@ -1097,6 +1211,10 @@ class EnsightGeometryFile:
             if part.part_id == part_id:
                 return part
         return None
+
+    def iter_parts(self) -> Iterable[GeometryPart]:
+        """Yield all GeometryParts"""
+        return self.parts.values()
 
     @classmethod
     def from_file_path(cls, file_path: Union[str, os.PathLike[str]], changing_geometry_per_part: bool) -> "EnsightGeometryFile":
@@ -1272,6 +1390,26 @@ class EnsightGeometryFile:
         with open(self.file_path, "r+b") as fp, _mmap.mmap(fp.fileno(), 0, access=_mmap.ACCESS_WRITE) as mm:
             yield mm
 
+    def affine_transform(self, m: Float32NDArray) -> None:
+        """
+        Apply affine transformation to all parts
+
+        See Also:
+            `apply_affine_transform()`
+
+        Args:
+            m: 4x4 affine transformation matrix
+
+        """
+        self.visit(_AffineTransformGeometryVisitor(m))
+
+    def visit(self, visitor: GeometryVisitor) -> None:
+        """Apply a `GeometryVisitor` to all parts"""
+        with (self.mmap() if visitor.is_read_only() else self.mmap_writable()) as mm:
+            for part in self.iter_parts():
+                coordinates_arr = part.read_nodes(mm)
+                visitor.visit_part(coordinates_arr, part)
+
 
 @dataclass
 class EnsightVariableFile:
@@ -1345,6 +1483,14 @@ class EnsightVariableFile:
         self.part_element_offsets = variable.part_element_offsets
         self.part_per_node_undefined_values = variable.part_per_node_undefined_values
         self.part_per_element_undefined_values = variable.part_per_element_undefined_values
+
+    def iter_part_ids(self) -> Iterable[int]:
+        """Yield all part IDs"""
+        return self.part_offsets.keys()
+
+    def iter_part_id_element_types(self, part_id: int) -> Iterable[ElementType]:
+        """Yield all ElementTypes for given part ID"""
+        return (et for pid, et in self.part_element_offsets.keys() if pid == part_id)
 
     def is_defined_for_part_id(self, part_id: int) -> bool:
         """Return True if variable is defined for given part, else False"""
@@ -1790,6 +1936,52 @@ class EnsightVariableFile:
         with open(self.file_path, "r+b") as fp, _mmap.mmap(fp.fileno(), 0, access=_mmap.ACCESS_WRITE) as mm:
             yield mm
 
+    def affine_transform(self, m: Float32NDArray, geofile: EnsightGeometryFile) -> None:
+        """
+        Apply affine transformation to all parts
+
+        See Also:
+            `apply_affine_transform()`
+
+        Args:
+            m: 4x4 affine transformation matrix
+            geofile: EnsightGeometryFile for the relevant timestep
+
+        """
+        self.visit(_AffineTransformVariableVisitor(m), geofile)
+
+    def visit(self, visitor: VariableVisitor, geofile: EnsightGeometryFile) -> None:
+        """
+        Apply a `VariableVisitor` to all part data
+
+        Examples:
+            >>> import ensightreader
+            >>> class MyVariableVisitor(ensightreader.VariableVisitor):
+            ...     pass  # your implementation
+            >>> case = read_case("my.case")
+            >>> case.get_variable("pressure").visit(MyVariableVisitor(), case.get_geometry_model())
+        """
+        if not visitor.visit_variable(self.variable_location, self.variable_type, self.variable_name):
+            return
+
+        with (self.mmap() if visitor.is_read_only() else self.mmap_writable()) as mm:
+            for part_id in self.iter_part_ids():
+                part = geofile.get_part_by_id(part_id)
+                if part is None:
+                    raise EnsightReaderError(f"Cannot find part id {part_id} in provided geofile {geofile!r}")
+
+                if self.variable_location == VariableLocation.PER_NODE:
+                    data_arr = self.read_node_data(mm, part_id)
+                    if data_arr is not None:
+                        visitor.visit_part(data_arr, part, self)
+                elif self.variable_location == VariableLocation.PER_ELEMENT:
+                    for element_type in self.iter_part_id_element_types(part_id):
+                        data_arr = self.read_element_data(mm, part_id, element_type)
+                        if data_arr is not None:
+                            visitor.visit_part(data_arr, part, self)
+                else:
+                    raise NotImplementedError
+
 
 def fill_wildcard(filename: str, value: int) -> str:
     return re.sub(r"\*+", lambda m: str(value).zfill(len(m.group(0))), filename, count=1)
@@ -1826,6 +2018,27 @@ class EnsightGeometryFileSet:
 
         path = op.join(self.casefile_dir_path, timestep_filename)
         return EnsightGeometryFile.from_file_path(path, changing_geometry_per_part=self.changing_geometry_per_part)
+
+    def get_timestep_ids(self) -> Sequence[int]:
+        return self.timeset.get_timestep_ids() if self.timeset is not None else [0]
+
+    def affine_transform(self, m: Float32NDArray) -> None:
+        """
+        Apply affine transformation to all parts in all timesteps
+
+        See Also:
+            `apply_affine_transform()`
+
+        Args:
+            m: 4x4 affine transformation matrix
+
+        """
+        self.visit(_AffineTransformGeometryVisitor(m))
+
+    def visit(self, visitor: GeometryVisitor) -> None:
+        """Apply a `GeometryVisitor` to all parts in all timesteps"""
+        for i in self.get_timestep_ids():
+            self.get_file(i).visit(visitor)
 
 
 @dataclass
@@ -1874,6 +2087,56 @@ class EnsightVariableFileSet:
         return EnsightVariableFile.from_file_path(path, variable_name=self.variable_name,
                                                   variable_location=self.variable_location,
                                                   variable_type=self.variable_type, geofile=geofile)
+
+    def get_timestep_ids(self) -> Sequence[int]:
+        return self.timeset.get_timestep_ids() if self.timeset is not None else [0]
+
+    def affine_transform(self, m: Float32NDArray, geometry_model: EnsightGeometryFileSet) -> None:
+        """
+        Apply affine transformation
+
+        Args:
+            m: 4x4 affine transformation matrix
+            geometry_model: EnsightGeometryFileSet for the case
+
+        """
+        self.visit(_AffineTransformVariableVisitor(m), geometry_model)
+
+    def visit(self, visitor: VariableVisitor, geometry_model: EnsightGeometryFileSet) -> None:
+        """
+        Apply a `VariableVisitor` to all part data in all timesteps
+
+        Examples:
+            >>> import ensightreader
+            >>> class MyVariableVisitor(ensightreader.VariableVisitor):
+            ...     pass  # your implementation
+            >>> case = read_case("my.case")
+            >>> case.variables["pressure"].visit(MyVariableVisitor(), case.geometry_model)
+        """
+        if not visitor.visit_variable(self.variable_location, self.variable_type, self.variable_name):
+            return
+
+        variable_ts = self.timeset
+        geometry_ts = geometry_model.timeset
+
+        if variable_ts is None:
+            # steady variable
+            geofile = geometry_model.get_file()
+            self.get_file(geofile).visit(visitor, geofile)
+        else:
+            if geometry_ts is None:
+                # transient variable, steady geometry
+                geofile = geometry_model.get_file()
+                for i in self.get_timestep_ids():
+                    self.get_file(geofile, i).visit(visitor, geofile)
+            else:
+                # transient variable, transient geometry
+                if variable_ts.timeset_id != geometry_ts.timeset_id:
+                    raise EnsightReaderError(f"Geometry and variable {self.variable_name!r} use different timesets")
+
+                for i in self.get_timestep_ids():
+                    geofile = geometry_model.get_file(i)
+                    self.get_file(geofile, i).visit(visitor, geofile)
 
 
 @dataclass
@@ -2713,6 +2976,25 @@ class EnsightCaseFile:
         self.to_file(self.casefile_path)
 
         return self.get_variable(variable_name)
+
+    def affine_transform(self, m: Float32NDArray, geometry: bool = True, variables: bool = True) -> None:
+        """
+        Apply affine transformation
+
+        See Also:
+            `apply_affine_transform()`
+
+        Args:
+            m: 4x4 affine transformation matrix
+            geometry: True if geometry nodes should be transformed
+            variables: True if variable data should be transformed
+
+        """
+        if geometry:
+            self.geometry_model.visit(_AffineTransformGeometryVisitor(m))
+        if variables:
+            for variable in self.variables.values():
+                variable.visit(_AffineTransformVariableVisitor(m), self.geometry_model)
 
 
 def read_case(path: Union[str, os.PathLike[str]]) -> EnsightCaseFile:

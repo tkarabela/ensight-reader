@@ -135,5 +135,117 @@ def ensight_transform(ensight_case_path: str,
     return 0
 
 
+def ensight_transform_with_affine_transform(
+        ensight_case_path: str,
+        translate: Optional[Float32NDArray] = None,
+        scale: Optional[Float32NDArray] = None,
+        matrix: Optional[Float32NDArray] = None,
+        part_name_regex: Optional[str] = None
+) -> int:
+    """Main function of ensight_transform.py (using affine_transform method)"""
+
+    if part_name_regex is not None:
+        raise NotImplementedError
+
+    if matrix is not None:
+        m = matrix
+    elif scale is not None:
+        m = np.asarray([
+            [scale[0], 0, 0, 0],
+            [0, scale[1], 0, 0],
+            [0, 0, scale[2], 0],
+            [0, 0, 0, 1],
+        ], dtype=np.float32)
+    elif translate is not None:
+        m = np.asarray([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [translate[0], translate[1], translate[2], 1],
+        ], dtype=np.float32)
+    else:
+        raise NotImplementedError
+
+    print("Reading input EnSight case", ensight_case_path)
+    case = ensightreader.read_case(ensight_case_path)
+
+    print("Transforming nodes...")
+    if translate is not None:
+        print("Translate by", translate)
+    if scale is not None:
+        print("Scale by", scale)
+    if matrix is not None:
+        print("Affine transformation", matrix, sep="\n")
+
+    case.get_geometry_model().affine_transform(m)
+
+    print("\nAll done.")
+    return 0
+
+
+def ensight_transform_with_visitor(
+        ensight_case_path: str,
+        translate: Optional[Float32NDArray] = None,
+        scale: Optional[Float32NDArray] = None,
+        matrix: Optional[Float32NDArray] = None,
+        part_name_regex: Optional[str] = None
+) -> int:
+    """Main function of ensight_transform.py (visitor implementation)"""
+
+    print("Reading input EnSight case", ensight_case_path)
+    case = ensightreader.read_case(ensight_case_path)
+    case.get_geometry_model().visit(TransformGeometryVisitor(translate, scale, matrix, part_name_regex))
+
+    print("\nAll done.")
+    return 0
+
+
+class TransformGeometryVisitor(ensightreader.GeometryVisitor):
+    def __init__(
+            self,
+            translate: Optional[Float32NDArray] = None,
+            scale: Optional[Float32NDArray] = None,
+            matrix: Optional[Float32NDArray] = None,
+            part_name_regex: Optional[str] = None
+    ):
+        self.translate = translate
+        self.scale = scale
+        self.matrix = matrix
+        self.part_name_regex = part_name_regex
+
+        print("Transforming nodes...")
+        if translate is not None:
+            print("Translate by", translate)
+        if scale is not None:
+            print("Scale by", scale)
+        if matrix is not None:
+            print("Affine transformation", matrix, sep="\n")
+
+    def visit_part(self, coordinates_arr: Float32NDArray, part: ensightreader.GeometryPart) -> None:
+        if self.part_name_regex and not re.search(self.part_name_regex, part.part_name):
+            print("Skipping part", part.part_name, "(name doesn't match)")
+
+        node_array = coordinates_arr
+        N = node_array.shape[0]
+
+        if self.translate is not None:
+            node_array[:, 0] += self.translate[0]
+            node_array[:, 1] += self.translate[1]
+            node_array[:, 2] += self.translate[2]
+
+        if self.scale is not None:
+            node_array[:, 0] *= self.scale[0]
+            node_array[:, 1] *= self.scale[1]
+            node_array[:, 2] *= self.scale[2]
+
+        if self.matrix is not None:
+            tmp = np.empty((N, 4), dtype=np.float32)
+            tmp[:, :3] = node_array
+            tmp[:, 3] = 1.0
+
+            tmp = tmp.dot(self.matrix)
+            node_array[:, :3] = tmp[:, :3]
+
+
 if __name__ == "__main__":
     sys.exit(main())

@@ -3,10 +3,11 @@ import shutil
 import tempfile
 
 import numpy as np
+import pytest
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-from ensight_transform import ensight_transform
+from ensight_transform import ensight_transform, ensight_transform_with_visitor, ensight_transform_with_affine_transform
 from ensightreader import ElementType, EnsightGeometryFile, GeometryPart, IdHandling, read_case
 
 ENSIGHT_CASE_DIR = "./data/sphere"
@@ -218,12 +219,15 @@ def test_sphere_case_ensight2vtk():
         )
 
 
-def test_sphere_case_ensight_transform_translate():
+@pytest.mark.parametrize("ensight_transform_fn", [
+    ensight_transform, ensight_transform_with_visitor, ensight_transform_with_affine_transform
+])
+def test_sphere_case_ensight_transform_translate(ensight_transform_fn):
     with tempfile.TemporaryDirectory() as temp_dir:
         shutil.copytree(ENSIGHT_CASE_DIR, op.join(temp_dir, "sphere"))
         temp_case = op.join(temp_dir, "sphere/sphere.case")
 
-        assert 0 == ensight_transform(
+        assert 0 == ensight_transform_fn(
             ensight_case_path=temp_case,
             translate=np.asarray([5, 6, 7])
         )
@@ -240,12 +244,15 @@ def test_sphere_case_ensight_transform_translate():
                                    NODES_REF[i] + np.asarray([5, 6, 7]))
 
 
-def test_sphere_case_ensight_transform_scale():
+@pytest.mark.parametrize("ensight_transform_fn", [
+    ensight_transform, ensight_transform_with_visitor, ensight_transform_with_affine_transform
+])
+def test_sphere_case_ensight_transform_scale(ensight_transform_fn):
     with tempfile.TemporaryDirectory() as temp_dir:
         shutil.copytree(ENSIGHT_CASE_DIR, op.join(temp_dir, "sphere"))
         temp_case = op.join(temp_dir, "sphere/sphere.case")
 
-        assert 0 == ensight_transform(
+        assert 0 == ensight_transform_fn(
             ensight_case_path=temp_case,
             scale=np.asarray([.5, 1, 2])
         )
@@ -262,12 +269,15 @@ def test_sphere_case_ensight_transform_scale():
                                    NODES_REF[i] * np.asarray([.5, 1, 2]))
 
 
-def test_sphere_case_ensight_transform_matrix():
+@pytest.mark.parametrize("ensight_transform_fn", [
+    ensight_transform, ensight_transform_with_visitor, ensight_transform_with_affine_transform
+])
+def test_sphere_case_ensight_transform_matrix(ensight_transform_fn):
     with tempfile.TemporaryDirectory() as temp_dir:
         shutil.copytree(ENSIGHT_CASE_DIR, op.join(temp_dir, "sphere"))
         temp_case = op.join(temp_dir, "sphere/sphere.case")
 
-        assert 0 == ensight_transform(
+        assert 0 == ensight_transform_fn(
             ensight_case_path=temp_case,
             matrix=np.asarray([
                 [.5, 0, 0, 0],

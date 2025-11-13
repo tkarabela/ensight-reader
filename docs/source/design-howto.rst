@@ -166,6 +166,21 @@ Here are some examples to get you started:
 Modifying variable values
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Using the visitor pattern:
+
+::
+
+    >>> import ensightreader
+
+    >>> class MyVariableVisitor(ensightreader.VariableVisitor):
+    ...     def visit_part(self, data_arr, part, variable):
+    ...         data_arr[:] *= 2
+
+    >>> case = ensightreader.read_case("data/sphere/sphere.case")
+    >>> case.variables["RTData"].visit(MyVariableVisitor(), case.geometry_model)
+
+Manually:
+
 ::
 
     >>> import ensightreader
@@ -220,6 +235,37 @@ Defining new variable
 
 Changing node coordinates
 ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Using the visitor pattern:
+
+::
+
+    >>> import ensightreader
+
+    >>> class MyGeometryVisitor(ensightreader.GeometryVisitor):
+    ...     def visit_part(self, coordinates_arr, part):
+    ...         coordinates_arr[:, 0] += 1.0  # increment X coordiante
+
+    >>> case = ensightreader.read_case("data/sphere/sphere.case")
+    >>> case.get_geometry_model().visit(MyGeometryVisitor())      # transform first timestep geometry
+    >>> case.geometry_model.visit(MyGeometryVisitor())            # transform all timesteps geometry
+
+Using the affine transformation method:
+
+::
+
+    >>> import ensightreader, numpy as np
+
+    >>> case = ensightreader.read_case("data/sphere/sphere.case")
+
+    >>> m = np.eye(4, dtype=np.float32)
+    >>> m[3, 0] = 1.0  # increment X coordiante
+
+    >>> case.get_geometry_model().affine_transform(m)             # transform first timestep geometry
+    >>> case.geometry_model.affine_transform(m)                   # transform all timesteps geometry
+    >>> case.affine_transform(m, geometry=True, variables=False)  # transform all timesteps geometry
+
+Manually:
 
 ::
 
