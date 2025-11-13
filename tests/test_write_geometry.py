@@ -358,6 +358,45 @@ def test_append_geometry_and_variables(tmp_path, source_case_path, dest_case_pat
 
     dest_case2 = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
     assert set(dest_case2.get_variables()) == set(dest_case_original_variables) | set(source_case.get_variables())
+    for name in source_case.get_variables():
+        assert op.basename(source_case.get_variable(name).file_path) == op.basename(dest_case2.get_variable(name).file_path)
+
+
+@pytest.mark.parametrize(
+    "source_case_path,dest_case_path",
+    [
+        (CAVITY_CASE_PATH, SPHERE_CASE_PATH),
+        (SPHERE_CASE_PATH, CAVITY_CASE_PATH),
+    ]
+)
+def test_append_geometry_and_variables_with_custom_filenames(tmp_path, source_case_path, dest_case_path):
+    source_dir = tmp_path / "source"
+    dest_dir = tmp_path / "dest"
+
+    shutil.copytree(op.dirname(source_case_path), source_dir)
+    shutil.copytree(op.dirname(dest_case_path), dest_dir)
+
+    source_case = ensightreader.read_case(op.join(source_dir, op.basename(source_case_path)))
+    variables_to_copy = []
+    variable_output_filenames = []
+    for i, name in enumerate(source_case.get_variables()):
+        variables_to_copy.append(name)
+        variable_output_filenames.append(f"output_{name}_{i}")
+
+    dest_case = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
+    dest_case_original_variables = dest_case.get_variables()
+
+    dest_case.append_part_geometry(source_case, list(source_case.get_geometry_model().parts.values()))
+
+    with pytest.raises(ValueError):
+        dest_case.copy_part_variables(source_case, list(source_case.get_geometry_model().parts.values()), variables_to_copy, output_filenames=[])
+
+    dest_case.copy_part_variables(source_case, list(source_case.get_geometry_model().parts.values()), variables_to_copy, output_filenames=variable_output_filenames)
+
+    dest_case2 = ensightreader.read_case(op.join(dest_dir, op.basename(dest_case_path)))
+    assert set(dest_case2.get_variables()) == set(dest_case_original_variables) | set(source_case.get_variables())
+    for name, output_filename in zip(variables_to_copy, variable_output_filenames):
+        assert output_filename == op.basename(dest_case2.get_variable(name).file_path)
 
 
 @pytest.mark.parametrize(

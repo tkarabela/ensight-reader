@@ -2553,6 +2553,7 @@ class EnsightCaseFile:
             parts: List[GeometryPart],
             variables: List[str],
             timestep: int = 0,
+            output_filenames: Optional[List[str]] = None,
     ) -> None:
         """
         Copy given variables for given parts from different case
@@ -2580,6 +2581,9 @@ class EnsightCaseFile:
             variables: Names of variables to be copied
             timestep: Timestep number (note: creating transient variables is currently not supported;
                 they must exist in both cases for this to work)
+            output_filenames: If given, it must be a list of the same length as variables.
+                When i-th variable file does not exist, its filename will be ``output_filenames[i]``
+                (default: use the same name as source variable filename).
 
         See Also:
             `EnsightCaseFile.append_part_geometry()`
@@ -2588,7 +2592,10 @@ class EnsightCaseFile:
         source_geo = source_case.get_geometry_model(timestep)
         dest_geo = self.get_geometry_model(timestep)
 
-        for variable_name in variables:
+        if output_filenames is not None and len(output_filenames) != len(variables):
+            raise ValueError("output_filenames and variables lists must have the same length")
+
+        for i, variable_name in enumerate(variables):
             source_variable = source_case.get_variable(variable_name, timestep)
 
             if variable_name in self.variables:
@@ -2596,11 +2603,16 @@ class EnsightCaseFile:
             else:
                 if timestep != 0:
                     raise ValueError("Creating transient variables from scratch is not implemented")
+                if output_filenames is None:
+                    output_filename = op.basename(source_variable.file_path)
+                else:
+                    output_filename = output_filenames[i]
+
                 dest_variable = self.define_variable(
                     source_variable.variable_location,
                     source_variable.variable_type,
                     variable_name,
-                    op.basename(source_variable.file_path)
+                    output_filename
                 )
 
             # [*] first, append any undefined parts to the variable file (this cannot be done via mmap_writable!)
