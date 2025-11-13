@@ -80,7 +80,7 @@ such as **VTK**.
 
 - supports some features that ensight-reader currently does not (eg. structured parts)
 - has more high-level API, can do much more with the data (eg. interpolate node/element data, save to different formats, show in 3D viewport, ...)
-- does not support partial reading of parts
+- did not support partial reading of parts for a long time (as of VTK 9.4, this is implemented in ``vtkEnSightGoldCombinedReader``)
 - does not support memory-mapped access
 - converts the data into VTK datastructures (``vtkUnstructuredGrid``, etc.)
 
@@ -88,6 +88,38 @@ Code example
 ~~~~~~~~~~~~
 
 **VTK library**
+
+New code (VTK 9.5):
+
+::
+
+    >>> import vtk
+
+    >>> reader = vtk.vtkEnSightGoldCombinedReader()
+    >>> reader.SetCaseFileName("data/sphere/sphere.case")
+    >>> reader.Update()
+    >>> case: vtk.vtkPartitionedDataSetCollection = reader.GetOutput()
+
+    >>> part = case.GetPartitionedDataSet(0).GetPartition(0)
+    >>> part.points
+    VTKArray([[ 0.0000000e+00,  0.0000000e+00,  5.0000000e+00],
+              [ 0.0000000e+00,  0.0000000e+00, -5.0000000e+00],
+              ...
+              [ 1.5340106e+00, -1.5340106e+00, -4.5048442e+00]], dtype=float32)
+
+    >>> part.point_data["RTData"]
+    VTKArray([220.84135, 220.84135, 223.80856, 233.50835, 217.5993 ,
+              ...
+              213.36838, 210.3635 , 210.3635 , 213.36838, 232.34589],
+             dtype=float32)
+
+    >>> it = part.NewCellIterator()
+    >>> it.InitTraversal()
+    >>> while not it.IsDoneWithTraversal():
+    ...     point_ids: vtk.vtkIdList = it.point_ids
+    ...     it.GoToNextCell()
+
+Legacy code:
 
 ::
 

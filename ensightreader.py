@@ -447,6 +447,7 @@ class Timeset:
     time_values: List[float]
 
     def get_timestep_ids(self) -> Sequence[int]:
+        """Return all timestep IDs"""
         return range(self.number_of_steps)
 
     @staticmethod
@@ -2020,6 +2021,7 @@ class EnsightGeometryFileSet:
         return EnsightGeometryFile.from_file_path(path, changing_geometry_per_part=self.changing_geometry_per_part)
 
     def get_timestep_ids(self) -> Sequence[int]:
+        """Return all timestep IDs"""
         return self.timeset.get_timestep_ids() if self.timeset is not None else [0]
 
     def affine_transform(self, m: Float32NDArray) -> None:
@@ -2055,6 +2057,7 @@ class EnsightVariableFileSet:
         variable_type: type of the variable (scalar, ...)
         variable_name: name of the variable ('description' field in casefile)
         filename: path to the data file(s), including ``*`` wildcards if transient
+        geometry_model: instance of `EnsightGeometryFileSet`
     """
     casefile_dir_path: str
     timeset: Optional[Timeset]
@@ -2068,9 +2071,13 @@ class EnsightVariableFileSet:
         """
         Return variable for given timestep (use 0 if not transient)
 
+        If you have a case that has different timesets for variable and geometry,
+        you must set `EnsightGeometryFile` explicitly via the parameter. Otherwise,
+        it will be matched automatically.
+
         .. note::
-            Due to how EnSight Gold format works, you need to have matching geofile
-            already parsed before you attempt to read the variable file. The variable
+            Due to how EnSight Gold format works, we need to have matching geofile
+            already parsed before we attempt to read the variable file. The variable
             file itself (alas) does not give lengths of the arrays it contains.
 
             For transient geometry combined with transient variable, pay extra care because
@@ -2092,6 +2099,11 @@ class EnsightVariableFileSet:
                                                   variable_type=self.variable_type, geofile=geofile_)
 
     def get_geofile_for_timestep(self, timestep: int = 0) -> EnsightGeometryFile:
+        """
+        Return `EnsightGeometryFile` belonging to given variable timestep
+
+        If you have a case that has different timesets for variable and geometry, this will raise an exception.
+        """
         variable_ts = self.timeset
         geometry_ts = self.geometry_model.timeset
 
@@ -2103,6 +2115,7 @@ class EnsightVariableFileSet:
             return self.geometry_model.get_file()
 
     def get_timestep_ids(self) -> Sequence[int]:
+        """Return all timestep IDs"""
         return self.timeset.get_timestep_ids() if self.timeset is not None else [0]
 
     def affine_transform(self, m: Float32NDArray) -> None:
