@@ -2009,9 +2009,15 @@ class EnsightGeometryFileSet:
     timeset: Optional[Timeset]
     filename: str
     changing_geometry_per_part: bool = False
+    _file_cache: Dict[int, EnsightGeometryFile] = field(default_factory=dict, repr=False)
 
     def get_file(self, timestep: int = 0) -> EnsightGeometryFile:
         """Return geometry for given timestep (use 0 if not transient)"""
+        if timestep not in self._file_cache:
+            self._file_cache[timestep] = self._get_file(timestep)
+        return self._file_cache[timestep]
+
+    def _get_file(self, timestep: int = 0) -> EnsightGeometryFile:
         if self.timeset is None:
             timestep_filename = self.filename
         else:
@@ -2042,6 +2048,11 @@ class EnsightGeometryFileSet:
         for i in self.get_timestep_ids():
             self.get_file(i).visit(visitor)
 
+    def _clear_cache(self) -> None:
+        # This has to be private because of copies of EnsightGeometryFile inside EnsightVariableFile;
+        # we need to read everything again otherwise it might be inconsistent.
+        self._file_cache.clear()
+
 
 @dataclass
 class EnsightVariableFileSet:
@@ -2066,6 +2077,7 @@ class EnsightVariableFileSet:
     variable_name: str
     filename: str
     geometry_model: EnsightGeometryFileSet
+    _file_cache: Dict[int, EnsightVariableFile] = field(default_factory=dict, repr=False)
 
     def get_file(self, timestep: int = 0, geofile: Optional[EnsightGeometryFile] = None) -> EnsightVariableFile:
         """
@@ -2085,6 +2097,11 @@ class EnsightVariableFileSet:
             nodes, etc.
 
         """
+        if timestep not in self._file_cache:
+            self._file_cache[timestep] = self._get_file(timestep, geofile)
+        return self._file_cache[timestep]
+
+    def _get_file(self, timestep: int = 0, geofile: Optional[EnsightGeometryFile] = None) -> EnsightVariableFile:
         geofile_ = geofile if geofile is not None else self.get_geofile_for_timestep(timestep)
 
         # XXX be sure to match geofile and timestep!
@@ -2145,6 +2162,9 @@ class EnsightVariableFileSet:
         for i in self.get_timestep_ids():
             geofile = self.get_geofile_for_timestep(i)
             self.get_file(i).visit(visitor, geofile)
+
+    def _clear_cache(self) -> None:
+        self._file_cache.clear()
 
 
 @dataclass
@@ -2286,8 +2306,6 @@ class EnsightCaseFile:
     variables: Dict[str, EnsightVariableFileSet]  # variable name -> EnsightVariableFileSet
     constant_variables: Dict[str, EnsightConstantVariable]  # variable name -> EnsightConstantVariable
     timesets: Dict[int, Timeset]  # time set ID -> TimeSet
-    _geometry_file_cache: Dict[int, EnsightGeometryFile] = field(default_factory=dict, repr=False)
-    _variable_file_cache: Dict[Tuple[int, str], EnsightVariableFile] = field(default_factory=dict, repr=False)
 
     def get_geometry_model(self, timestep: int = 0) -> EnsightGeometryFile:
         """
@@ -2301,9 +2319,7 @@ class EnsightCaseFile:
             timestep: number of timestep, starting from zero (for non-transient
                 geometry, use 0)
         """
-        if timestep not in self._geometry_file_cache:
-            self._geometry_file_cache[timestep] = self.geometry_model.get_file(timestep)
-        return self._geometry_file_cache[timestep]
+        return self.geometry_model.get_file(timestep)
 
     def get_variable(self, name: str, timestep: int = 0) -> EnsightVariableFile:
         """
@@ -2318,22 +2334,7 @@ class EnsightCaseFile:
             timestep: number of timestep, starting from zero (for non-transient
                 variable, use 0)
         """
-        cache_key = (timestep, name)
-        if cache_key not in self._variable_file_cache:
-            variable_fileset = self.variables.get(name)
-            if variable_fileset is None:
-                raise KeyError(f"No variable named {name!r} (present variables: {list(self.variables.keys())})")
-
-            geofile_timeset = self.geometry_model.timeset
-            variable_timeset = variable_fileset.timeset
-            if geofile_timeset is not None and variable_timeset is not None:
-                if geofile_timeset.timeset_id != variable_timeset.timeset_id:
-                    raise NotImplementedError(f"Geometry and variable {name!r} use different timesets, "
-                                              f"this is currently not handled (if you want this, please call "
-                                              f"EnsightVariableFileSet.get_file() with the correct geofile)")
-
-            self._variable_file_cache[cache_key] = self.variables[name].get_file(timestep=timestep)
-        return self._variable_file_cache[cache_key]
+        return self.variables[name].get_file(timestep)
 
     def get_constant_variable_value(self, name: str, timestep: int = 0) -> float:
         """
@@ -3009,6 +3010,17 @@ class EnsightCaseFile:
         if variables:
             for variable in self.variables.values():
                 variable.visit(_AffineTransformVariableVisitor(m))
+
+    def clear_cache(self) -> None:
+        """
+        Remove caches of parsed file structure
+
+        After calling this, `EnsightCaseFile.get_geometry_model()`, `EnsightCaseFile.get_variable()`
+        will parse source files again.
+        """
+        self.geometry_model._clear_cache()
+        for variable in self.variables.values():
+            variable._clear_cache()
 
 
 def read_case(path: Union[str, os.PathLike[str]]) -> EnsightCaseFile:
