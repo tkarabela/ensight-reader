@@ -1,13 +1,17 @@
 Changelog
 =========
 
+0.13.1 (2025-11-14)
+-------------------
+- Updated caching strategy for consistency in face of manual changes to ``EnsightGeometryFile``
+
 0.13.0 (2025-11-13)
 -------------------
 
 - Added visitor methods for geometry and variables
 - Added methods for applying affine transformation
-- Improved filename handling in `EnsightCaseFile.copy_part_variables()` (keeps source filename or user can specify new filename)
-- Improved `EnsightVariableFileSet` API, user no longer needs to specify `EnsightGeometryFile` in typical use-cases
+- Improved filename handling in ``EnsightCaseFile.copy_part_variables()`` (keeps source filename or user can specify new filename)
+- Improved ``EnsightVariableFileSet`` API, user no longer needs to specify ``EnsightGeometryFile`` in typical use-cases
 - Added support for Python 3.14
 - Minimum NumPy version is now 1.22
 
