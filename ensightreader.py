@@ -389,7 +389,13 @@ class VariableVisitor:
         """Return False here if you do not wish to visit parts in given variable (default: True, ie. visit)"""
         return True
 
-    def visit_part(self, data_arr: Float32NDArray, part: "GeometryPart", variable: "EnsightVariableFile") -> None:
+    def visit_part(
+            self,
+            data_arr: Float32NDArray,
+            part: "GeometryPart",
+            variable: "EnsightVariableFile",
+            element_type: Optional[ElementType] = None
+    ) -> None:
         """
         Visit part variable data (override this method with your custom code)
 
@@ -399,6 +405,7 @@ class VariableVisitor:
                 separately.
             part: Part info.
             variable: Variable file.
+            element_type: For per-element variables, this will be the element type currently being visited.
         """
         return
 
@@ -420,7 +427,13 @@ class _AffineTransformVariableVisitor(VariableVisitor):
     def visit_variable(self, variable_location: VariableLocation, variable_type: VariableType, variable_name: str) -> bool:
         return variable_type.can_affine_transform()
 
-    def visit_part(self, data_arr: Float32NDArray, part: "GeometryPart", variable: "EnsightVariableFile") -> None:
+    def visit_part(
+            self,
+            data_arr: Float32NDArray,
+            part: "GeometryPart",
+            variable: "EnsightVariableFile",
+            element_type: Optional[ElementType] = None
+    ) -> None:
         apply_affine_transform(data_arr, self.m, translate=False)
 
 
@@ -1979,7 +1992,7 @@ class EnsightVariableFile:
                     for element_type in self.iter_part_id_element_types(part_id):
                         data_arr = self.read_element_data(mm, part_id, element_type)
                         if data_arr is not None:
-                            visitor.visit_part(data_arr, part, self)
+                            visitor.visit_part(data_arr, part, self, element_type)
                 else:
                     raise NotImplementedError
 
