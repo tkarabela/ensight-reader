@@ -71,7 +71,11 @@ dev = [
     "mypy~=1.18",
     "ruff~=0.14",
 ]
-
+docs = [
+    "sphinx~=7.4",
+    "sphinx-rtd-theme~=3.0",
+    "enum_tools[sphinx]~=0.12",
+]
 [tool.mypy]
 files = ["ensightreader.py", "tests/test_*.py"]
 
