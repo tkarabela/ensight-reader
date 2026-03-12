@@ -1,3 +1,83 @@
+[project]
+name = "ensight-reader"
+dynamic = ["version"]
+description = "A pure Python reader for the EnSight Gold format"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Tomas Karabela", email = "tkarabela@seznam.cz" },
+]
+dependencies = [
+    "numpy>=1.22",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/tkarabela/ensight-reader"
+Documentation = "https://ensight-reader.readthedocs.io"
+"Bug Tracker" = "https://github.com/tkarabela/ensight-reader/issues"
+
+[project.scripts]
+ensight2obj = "ensight2obj:main"
+ensight2vtk = "ensight2vtk:main"
+ensight_transform = "ensight_transform:main"
+
 [build-system]
-requires = ["setuptools>=42"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "ensightreader.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-include = [
+    "ensightreader.py",
+    "ensight2obj.py",
+    "ensight2vtk.py",
+    "ensight_transform.py",
+]
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "ensightreader.py",
+    "ensight2obj.py",
+    "ensight2vtk.py",
+    "ensight_transform.py",
+    "LICENSE.txt",
+    "README.md",
+]
+
+[dependency-groups]
+dev = [
+    "pytest~=8.2",
+    "pytest-cov~=5.0",
+    "mypy~=1.18",
+    "ruff~=0.14",
+]
+
+[tool.mypy]
+files = ["ensightreader.py", "tests/test_*.py"]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
