@@ -532,7 +532,7 @@ class UnstructuredElementBlock:
         arr = read_ints(fp, self.number_of_elements)
         return arr
 
-    def read_connectivity(self, fp: SeekableBufferedReader) -> Int32NDArray:
+    def read_connectivity(self, fp: SeekableBufferedReader, subset: Optional[Int32NDArray] = None) -> Int32NDArray:
         """
         Read connectivity (for elements other than NSIDED/NFACED)
 
@@ -541,6 +541,10 @@ class UnstructuredElementBlock:
 
         Args:
             fp: opened geometry file object in ``"rb"`` mode
+            subset: optional array of int32 cell indices (numbered from 0);
+                if provided, the output array will only contain these cells.
+                When this parameter is used, the method will always return a new array,
+                never a view into the underlying data.
 
         Returns:
             2D ``(n, k)`` array of int32 with node indices (numbered from 1), where
@@ -560,14 +564,27 @@ class UnstructuredElementBlock:
         nodes_per_element = NODES_PER_ELEMENT[self.element_type]
 
         arr = read_ints(fp, self.number_of_elements * nodes_per_element)
-        return arr.reshape((self.number_of_elements, nodes_per_element), order="C")
+        arr = arr.reshape((self.number_of_elements, nodes_per_element), order="C")
 
-    def read_connectivity_nsided(self, fp: SeekableBufferedReader) -> Tuple[Int32NDArray, Int32NDArray]:
+        if subset is not None:
+            arr = arr[subset, :].copy()
+
+        return arr
+
+    def read_connectivity_nsided(
+            self,
+            fp: SeekableBufferedReader,
+            subset: Optional[Int32NDArray] = None
+    ) -> Tuple[Int32NDArray, Int32NDArray]:
         """
-        Read connectivity (for NSIDED elements)
+        Read connectivity (for NSIDED elements, ie. polygons)
 
         Args:
             fp: opened geometry file object in ``"rb"`` mode
+            subset: optional array of int32 cell indices (numbered from 0);
+                if provided, the output arrays will only contain these cells.
+                When this parameter is used, the method will always return new arrays,
+                never views into the underlying data.
 
         Returns:
             tuple ``(polygon_node_counts, polygon_connectivity)`` where
@@ -588,11 +605,26 @@ class UnstructuredElementBlock:
 
         polygon_node_counts = read_ints(fp, self.number_of_elements)
         polygon_connectivity = read_ints(fp, polygon_node_counts.sum())
-        return polygon_node_counts, polygon_connectivity
+
+        if subset is not None:
+            output_polygon_node_counts = polygon_node_counts[subset].copy()
+            output_polygon_connectivity = np.empty(shape=(output_polygon_node_counts.sum(),), dtype=np.int32)
+            tmp = np.cumsum(polygon_node_counts)
+            out_ptr = 0
+            for i in subset:
+                in_ptr = in_start = tmp[i - 1] if i > 0 else 0
+                in_end = tmp[i]
+                n = in_end - in_start
+                output_polygon_connectivity[out_ptr:out_ptr + n] = polygon_connectivity[in_ptr:in_ptr + n]
+                out_ptr += n
+            assert out_ptr == len(output_polygon_connectivity)
+            return output_polygon_node_counts, output_polygon_connectivity
+        else:
+            return polygon_node_counts, polygon_connectivity
 
     def read_connectivity_nfaced(self, fp: SeekableBufferedReader) -> Tuple[Int32NDArray, Int32NDArray, Int32NDArray]:
         """
-        Read connectivity (for NFACED elements)
+        Read connectivity (for NFACED elements, ie. polyhedra)
 
         Args:
             fp: opened geometry file object in ``"rb"`` mode
@@ -686,7 +718,7 @@ class UnstructuredElementBlock:
     def write_element_block_nsided(fp: SeekableBufferedWriter, polygon_node_counts: Int32NDArray,
                                    polygon_connectivity: Int32NDArray, element_ids: Optional[Int32NDArray] = None) -> None:
         """
-        Write NSIDED element block to given opened file
+        Write NSIDED (polygonal) element block to given opened file
 
         See `UnstructuredElementBlock.read_connectivity_nsided()`.
         """
@@ -707,7 +739,7 @@ class UnstructuredElementBlock:
                                    face_node_counts: Int32NDArray, face_connectivity: Int32NDArray,
                                    element_ids: Optional[Int32NDArray] = None) -> None:
         """
-        Write NFACED element block to given opened file
+        Write NFACED (polyhedral) element block to given opened file
 
         See `UnstructuredElementBlock.read_connectivity_nfaced()`.
         """
@@ -833,6 +865,21 @@ class GeometryPart:
     def get_number_of_elements_of_type(self, element_type: ElementType) -> int:
         """Return number of elements (of given type)"""
         return sum(block.number_of_elements for block in self.element_blocks if block.element_type == element_type)
+
+    def get_element_block(self, element_type: ElementType) -> Optional[UnstructuredElementBlock]:
+        """
+        Return unique ``UnstructuredElementBlock`` for given element type
+
+        Raises:
+            ValueError: There are multiple blocks for the same element type in the geofile.
+        """
+        blocks = [b for b in self.element_blocks if b.element_type == element_type]
+        if not blocks:
+            return None
+        elif len(blocks) == 1:
+            return blocks[0]
+        else:
+            raise ValueError(f"More that one block of type {element_type}, please iterate over blocks manually")
 
     @classmethod
     def from_file(cls, fp: SeekableBufferedReader, node_id_handling: IdHandling,
