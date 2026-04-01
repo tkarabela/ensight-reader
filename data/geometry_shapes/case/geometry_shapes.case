@@ -1,0 +1,8 @@
+FORMAT
+type: ensight gold
+
+GEOMETRY
+model: geometry_shapes.geo
+
+VARIABLE
+scalar per element: object_id geometry_shapes.object_id

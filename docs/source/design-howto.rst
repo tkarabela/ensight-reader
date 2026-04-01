@@ -317,7 +317,8 @@ Manually:
 Creating geometry file from scratch
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Please see ``tests/test_write_geometry.py``, essentially you will need to do:
+Please see ``tests/test_write_geometry.py`` and ``obj2ensight.py``,
+essentially you will need to do:
 
 ::
 
@@ -367,4 +368,7 @@ with large models.
     :members:
 
 .. automodule:: ensight_transform
+    :members:
+
+.. automodule:: obj2ensight
     :members:
