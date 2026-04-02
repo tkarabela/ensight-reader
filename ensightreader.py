@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025 Tomas Karabela
+# Copyright (c) 2022-2026 Tomas Karabela
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,7 @@ SeekableBufferedWriter = Union[BinaryIO, _mmap.mmap]
 Float32NDArray = npt.NDArray[np.float32]
 Int32NDArray = npt.NDArray[np.int32]
 
-__version__ = "0.13.1"
+__version__ = "0.14.0"
 
 __all__ = [
     "read_case",
