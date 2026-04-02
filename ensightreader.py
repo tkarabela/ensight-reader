@@ -1863,6 +1863,57 @@ class EnsightVariableFile:
             fp.flush()
             self.reload_from_file()
 
+    @staticmethod
+    def copy_data_for_part(
+            in_fp: BinaryIO,
+            out_fp: BinaryIO,
+            in_part: GeometryPart,
+            out_part_id: int,
+            in_variable: "EnsightVariableFile",
+            out_variable: "EnsightVariableFile",
+            _reload_from_file: bool = True,
+    ) -> None:
+        """
+        Copy variable data for given part between cases
+
+        Args:
+            in_fp: Opened input variable file
+            out_fp: Opened output variable file (must be opened for writing)
+            in_part: `GeometryPart` object in input case
+            out_part_id: Part ID in output case
+            in_variable: Input `EnsightVariableFile` instance
+            out_variable: Output `EnsightVariableFile` instance
+
+        See Also:
+            `EnsightCaseFile.copy_part_variables()` for a higher-level method
+        """
+        if not in_variable.is_defined_for_part_id(in_part.part_id):
+            return
+
+        if out_variable.is_defined_for_part_id(out_part_id):
+            raise ValueError(f"Variable is already defined for part_id={out_part_id} in {out_variable!r}")
+
+        assert in_variable.variable_type == out_variable.variable_type
+        assert in_variable.variable_location == out_variable.variable_location
+
+        out_fp.seek(0, io.SEEK_END)
+
+        if in_variable.variable_location == VariableLocation.PER_NODE:
+            arr = in_variable.read_node_data(in_fp, in_part.part_id)
+            out_variable.write_node_data(out_fp, out_part_id, arr)
+        elif in_variable.variable_location == VariableLocation.PER_ELEMENT:
+            arr_per_element = {
+                block.element_type: in_variable.read_element_data(in_fp, in_part.part_id, block.element_type)
+                for block in in_part.element_blocks
+            }
+            out_variable.write_element_data(out_fp, out_part_id, arr_per_element)
+        else:
+            raise NotImplementedError("unexpected variable location")
+
+        if _reload_from_file:
+            out_fp.flush()
+            out_variable.reload_from_file()
+
     def ensure_data_for_all_parts(self, fp: BinaryIO, default_value: float = 0.0) -> None:
         """
         Append variable definitions for all parts that are currently undefined
