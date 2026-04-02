@@ -1780,7 +1780,7 @@ class EnsightVariableFile:
         k = VALUES_FOR_VARIABLE_TYPE[self.variable_type]
         if k > 1:
             assert arr.shape == (n, k)
-            arr = arr.reshape((n, k), order="F")
+            arr = arr.ravel("F")
         else:
             assert arr.shape in ((n,), (n, 1))
 
@@ -1812,7 +1812,7 @@ class EnsightVariableFile:
             k = VALUES_FOR_VARIABLE_TYPE[self.variable_type]
             if k > 1:
                 assert arr.shape == (n, k)
-                arr = arr.reshape((n, k), order="F")
+                arr = arr.ravel("F")
             else:
                 assert arr.shape in ((n,), (n, 1))
 
