@@ -966,8 +966,8 @@ class GeometryPart:
             self,
             in_fp: SeekableBufferedReader,
             out_fp: BinaryIO,
-            out_node_id_handling: IdHandling,
-            out_element_id_handling: IdHandling,
+            out_node_id_handling: IdHandling = IdHandling.OFF,
+            out_element_id_handling: IdHandling = IdHandling.OFF,
             out_part_id: Optional[int] = None,
             out_part_name: Optional[str] = None,
     ) -> None:
