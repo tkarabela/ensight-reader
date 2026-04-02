@@ -1900,12 +1900,14 @@ class EnsightVariableFile:
 
         if in_variable.variable_location == VariableLocation.PER_NODE:
             arr = in_variable.read_node_data(in_fp, in_part.part_id)
+            assert arr is not None, "arr must be defined for in_part.part_id"
             out_variable.write_node_data(out_fp, out_part_id, arr)
         elif in_variable.variable_location == VariableLocation.PER_ELEMENT:
-            arr_per_element = {
-                block.element_type: in_variable.read_element_data(in_fp, in_part.part_id, block.element_type)
-                for block in in_part.element_blocks
-            }
+            arr_per_element = {}
+            for block in in_part.element_blocks:
+                arr = in_variable.read_element_data(in_fp, in_part.part_id, block.element_type)
+                assert arr is not None, "arr must be defined for in_part.part_id"
+                arr_per_element[block.element_type] = arr
             out_variable.write_element_data(out_fp, out_part_id, arr_per_element)
         else:
             raise NotImplementedError("unexpected variable location")
