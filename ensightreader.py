@@ -797,6 +797,11 @@ class GeometryPart:
     element_id_handling: IdHandling
     changing_geometry: Optional[ChangingGeometry] = None
 
+    @property
+    def pretty_part_name(self) -> str:
+        """Part name stripped of whitespace and null bytes"""
+        return self.part_name.strip(" \x00\n")
+
     def read_nodes(self, fp: SeekableBufferedReader) -> Float32NDArray:
         """
         Read node coordinates for this part
