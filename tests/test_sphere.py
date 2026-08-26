@@ -1,3 +1,4 @@
+# pyrefly: ignore-errors[implicit-any-parameter]
 import os.path as op
 import shutil
 import tempfile
@@ -7,8 +8,18 @@ import pytest
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-from ensight_transform import ensight_transform, ensight_transform_with_visitor, ensight_transform_with_affine_transform
-from ensightreader import ElementType, EnsightGeometryFile, GeometryPart, IdHandling, read_case
+from ensight_transform import (
+    ensight_transform,
+    ensight_transform_with_affine_transform,
+    ensight_transform_with_visitor,
+)
+from ensightreader import (
+    ElementType,
+    EnsightGeometryFile,
+    GeometryPart,
+    IdHandling,
+    read_case,
+)
 
 ENSIGHT_CASE_DIR = "./data/sphere"
 ENSIGHT_CASE_PATH = op.join(ENSIGHT_CASE_DIR, "sphere.case")
@@ -52,6 +63,7 @@ def test_read_sphere_case():
         assert nodes.flags.writeable
 
         node_ids = part.read_node_ids(fp_geo)
+        assert node_ids is not None
         assert node_ids.shape == NODE_IDS_REF.shape
         assert node_ids.dtype == NODE_IDS_REF.dtype
         assert np.equal(node_ids, NODE_IDS_REF).all()
@@ -66,6 +78,7 @@ def test_read_sphere_case():
         assert connectivity.flags.writeable
 
         element_ids = block.read_element_ids(fp_geo)
+        assert element_ids is not None
         assert element_ids.shape == ELEMENT_IDS_REF.shape
         assert element_ids.dtype == ELEMENT_IDS_REF.dtype
         assert np.equal(element_ids, ELEMENT_IDS_REF).all()
@@ -76,6 +89,7 @@ def test_read_sphere_case():
     variable = case.get_variable("RTData")
     with variable.open() as fp:
         variable_data = variable.read_node_data(fp, part.part_id)
+        assert variable_data is not None
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)
@@ -120,6 +134,7 @@ def test_read_sphere_case_mmap():
         assert not nodes.flags.writeable
 
         node_ids = part.read_node_ids(mm_geo)
+        assert node_ids is not None
         assert node_ids.shape == NODE_IDS_REF.shape
         assert node_ids.dtype == NODE_IDS_REF.dtype
         assert np.equal(node_ids, NODE_IDS_REF).all()
@@ -134,6 +149,7 @@ def test_read_sphere_case_mmap():
         assert not connectivity.flags.writeable
 
         element_ids = block.read_element_ids(mm_geo)
+        assert element_ids is not None
         assert element_ids.shape == ELEMENT_IDS_REF.shape
         assert element_ids.dtype == ELEMENT_IDS_REF.dtype
         assert np.equal(element_ids, ELEMENT_IDS_REF).all()
@@ -149,6 +165,7 @@ def test_read_sphere_case_mmap():
         assert nodes.flags.writeable
 
         node_ids = part.read_node_ids(mm_geo)
+        assert node_ids is not None
         assert node_ids.shape == NODE_IDS_REF.shape
         assert node_ids.dtype == NODE_IDS_REF.dtype
         assert np.equal(node_ids, NODE_IDS_REF).all()
@@ -163,6 +180,7 @@ def test_read_sphere_case_mmap():
         assert connectivity.flags.writeable
 
         element_ids = block.read_element_ids(mm_geo)
+        assert element_ids is not None
         assert element_ids.shape == ELEMENT_IDS_REF.shape
         assert element_ids.dtype == ELEMENT_IDS_REF.dtype
         assert np.equal(element_ids, ELEMENT_IDS_REF).all()
@@ -172,6 +190,7 @@ def test_read_sphere_case_mmap():
     variable = case.get_variable("RTData")
     with variable.mmap() as mm_var:
         variable_data = variable.read_node_data(mm_var, part.part_id)
+        assert variable_data is not None
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)
@@ -179,6 +198,7 @@ def test_read_sphere_case_mmap():
 
     with variable.mmap_writable() as mm_var:
         variable_data = variable.read_node_data(mm_var, part.part_id)
+        assert variable_data is not None
         assert variable_data.shape == VARIABLE_DATA_REF.shape
         assert variable_data.dtype == VARIABLE_DATA_REF.dtype
         assert np.allclose(variable_data, VARIABLE_DATA_REF)
@@ -235,6 +255,7 @@ def test_sphere_case_ensight_transform_translate(ensight_transform_fn):
         case = read_case(temp_case)
         geofile = case.get_geometry_model()
         part = geofile.get_part_by_name("VTK Part")
+        assert part is not None
         with geofile.open() as fp_geo:
             nodes = part.read_nodes(fp_geo)
             N = nodes.shape[0]
@@ -260,6 +281,7 @@ def test_sphere_case_ensight_transform_scale(ensight_transform_fn):
         case = read_case(temp_case)
         geofile = case.get_geometry_model()
         part = geofile.get_part_by_name("VTK Part")
+        assert part is not None
         with geofile.open() as fp_geo:
             nodes = part.read_nodes(fp_geo)
             N = nodes.shape[0]
@@ -290,6 +312,7 @@ def test_sphere_case_ensight_transform_matrix(ensight_transform_fn):
         case = read_case(temp_case)
         geofile = case.get_geometry_model()
         part = geofile.get_part_by_name("VTK Part")
+        assert part is not None
         with geofile.open() as fp_geo:
             nodes = part.read_nodes(fp_geo)
             N = nodes.shape[0]

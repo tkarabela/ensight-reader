@@ -1,6 +1,12 @@
+# pyrefly: ignore-errors[missing-attribute]
 import pytest
 
-from ensightreader import read_case, VariableLocation, VariableType, EnsightReaderWarning
+from ensightreader import (
+    EnsightReaderWarning,
+    VariableLocation,
+    VariableType,
+    read_case,
+)
 
 ENSIGHT_CASE_PATH = "./data/dummy_case_file/dummy_case_file.case"
 ENSIGHT_CASE_PATH_WITH_UNMARKED_TIMESETS = "./data/dummy_case_file/dummy_case_file_with_unmarked_timesets.case"

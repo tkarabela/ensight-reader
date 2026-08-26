@@ -55,6 +55,9 @@ jobs:
         run: |
             uv run mypy
             uv run mypy --strict --no-warn-unused-ignores ensightreader.py
+      - name: Typecheck with pyrefly
+        run: |
+            uv run pyrefly check
       - name: Check with ruff
         run: |
           uv run ruff check

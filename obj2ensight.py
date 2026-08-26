@@ -18,12 +18,12 @@ from pathlib import Path
 import numpy as np
 
 from ensightreader import (
+    ElementType,
     EnsightCaseFile,
     GeometryPart,
-    ElementType,
     UnstructuredElementBlock,
     VariableLocation,
-    VariableType
+    VariableType,
 )
 
 

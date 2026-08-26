@@ -73,14 +73,27 @@ dev = [
     "pytest-cov~=5.0",
     "mypy~=1.18",
     "ruff~=0.14",
+    "pyrefly~=1.1",
 ]
 docs = [
     "sphinx==8.2.3; python_version >= '3.11'",
     "sphinx-rtd-theme==3.1.0; python_version >= '3.11'",
     "enum-tools[sphinx]==0.13.0; python_version >= '3.11'",
 ]
+
 [tool.mypy]
 files = ["ensightreader.py", "tests/test_*.py"]
+
+[tool.pyrefly]
+project-includes = [
+    "ensightreader.py",
+    "tests/test_*.py",
+]
+preset = "strict"
+
+[tool.pyrefly.errors]
+implicit-any-lambda = false
+missing-override-decorator = false
 
 [tool.coverage.run]
 branch = true
@@ -88,3 +101,13 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+[tool.ruff.lint]
+ignore = [
+    "PLW1510",
+    "UP012",
+    "RUF046",
+    "BLE001",
+    "S110",
+    "FA100",
+]

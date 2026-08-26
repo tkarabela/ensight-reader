@@ -25,11 +25,17 @@ import os
 import os.path as op
 import re
 import warnings
+from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import BinaryIO, Dict, Generator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, Iterator, Mapping, \
-    Sequence, Iterable
+from typing import (
+    BinaryIO,
+    Optional,
+    TextIO,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -44,24 +50,23 @@ Int32NDArray = npt.NDArray[np.int32]
 __version__ = "0.14.0"
 
 __all__ = [
-    "read_case",
-
+    "ChangingGeometry",
+    "ElementType",
+    "EnsightCaseFile",
+    "EnsightConstantVariable",
+    "EnsightGeometryFile",
+    "EnsightGeometryFileSet",
     "EnsightReaderError",
     "EnsightReaderWarning",
+    "EnsightVariableFile",
+    "EnsightVariableFileSet",
+    "GeometryPart",
     "IdHandling",
-    "ChangingGeometry",
-    "VariableLocation",
-    "VariableType",
-    "ElementType",
     "Timeset",
     "UnstructuredElementBlock",
-    "GeometryPart",
-    "EnsightGeometryFile",
-    "EnsightVariableFile",
-    "EnsightGeometryFileSet",
-    "EnsightVariableFileSet",
-    "EnsightConstantVariable",
-    "EnsightCaseFile",
+    "VariableLocation",
+    "VariableType",
+    "read_case",
 ]
 
 
@@ -92,17 +97,18 @@ class EnsightReaderError(Exception):
 
     """
     def __init__(self, msg: str, fp: Optional[Union[TextIO, SeekableBufferedReader]] = None, lineno: Optional[int] = None):
+        self.file_offset: Optional[int] = None
         self.file_path = getattr(fp, "name", None)
         try:
             self.file_offset = fp.tell() if fp else None
         except OSError:
-            self.file_offset = None
+            pass
         self.file_lineno = lineno
         if lineno is not None:
             message = f"{msg} (path={self.file_path}, line={self.file_lineno})"
         else:
             message = f"{msg} (path={self.file_path}, offset={self.file_offset})"
-        super(EnsightReaderError, self).__init__(message)
+        super().__init__(message)
 
 
 class EnsightReaderWarning(Warning):
@@ -123,11 +129,12 @@ class EnsightReaderWarning(Warning):
             lineno: Optional[int] = None,
             file_path: Optional[Union[str, os.PathLike[str]]] = None
     ):
+        self.file_offset: Optional[int] = None
         self.file_path = file_path if file_path is not None else getattr(fp, "name", None)
         try:
             self.file_offset = fp.tell() if fp else None
         except OSError:
-            self.file_offset = None
+            pass
         self.file_lineno = lineno
         if self.file_path is None:
             message = msg
@@ -138,7 +145,7 @@ class EnsightReaderWarning(Warning):
                 message = f"{msg} (path={self.file_path}, offset={self.file_offset})"
             else:
                 message = f"{msg} (path={self.file_path})"
-        super(EnsightReaderWarning, self).__init__(message)
+        super().__init__(message)
 
 
 class IdHandling(Enum):
@@ -456,15 +463,15 @@ class Timeset:
     timeset_id: int
     description: Optional[str]
     number_of_steps: int
-    filename_numbers: List[int]
-    time_values: List[float]
+    filename_numbers: list[int]
+    time_values: list[float]
 
     def get_timestep_ids(self) -> Sequence[int]:
         """Return all timestep IDs"""
         return range(self.number_of_steps)
 
     @staticmethod
-    def filename_numbers_from_arithmetic_sequence(file_start_number: int, number_of_steps: int, filename_increment: int) -> List[int]:
+    def filename_numbers_from_arithmetic_sequence(file_start_number: int, number_of_steps: int, filename_increment: int) -> list[int]:
         assert filename_increment >= 0
         assert number_of_steps >= 0
         assert file_start_number >= 0
@@ -575,7 +582,7 @@ class UnstructuredElementBlock:
             self,
             fp: SeekableBufferedReader,
             subset: Optional[Int32NDArray] = None
-    ) -> Tuple[Int32NDArray, Int32NDArray]:
+    ) -> tuple[Int32NDArray, Int32NDArray]:
         """
         Read connectivity (for NSIDED elements, ie. polygons)
 
@@ -604,7 +611,7 @@ class UnstructuredElementBlock:
             fp.seek(self.number_of_elements * SIZE_INT, os.SEEK_CUR)
 
         polygon_node_counts = read_ints(fp, self.number_of_elements)
-        polygon_connectivity = read_ints(fp, polygon_node_counts.sum())
+        polygon_connectivity = read_ints(fp, int(polygon_node_counts.sum()))
 
         if subset is not None:
             output_polygon_node_counts = polygon_node_counts[subset].copy()
@@ -622,7 +629,7 @@ class UnstructuredElementBlock:
         else:
             return polygon_node_counts, polygon_connectivity
 
-    def read_connectivity_nfaced(self, fp: SeekableBufferedReader) -> Tuple[Int32NDArray, Int32NDArray, Int32NDArray]:
+    def read_connectivity_nfaced(self, fp: SeekableBufferedReader) -> tuple[Int32NDArray, Int32NDArray, Int32NDArray]:
         """
         Read connectivity (for NFACED elements, ie. polyhedra)
 
@@ -650,8 +657,8 @@ class UnstructuredElementBlock:
             fp.seek(self.number_of_elements * SIZE_INT, os.SEEK_CUR)
 
         polyhedra_face_counts = read_ints(fp, self.number_of_elements)
-        face_node_counts = read_ints(fp, polyhedra_face_counts.sum())
-        face_connectivity = read_ints(fp, face_node_counts.sum())
+        face_node_counts = read_ints(fp, int(polyhedra_face_counts.sum()))
+        face_connectivity = read_ints(fp, int(face_node_counts.sum()))
         return polyhedra_face_counts, face_node_counts, face_connectivity
 
     @classmethod
@@ -677,11 +684,11 @@ class UnstructuredElementBlock:
                 fp.seek(nodes_per_element * number_of_elements * SIZE_INT, os.SEEK_CUR)  # skip connectivity
             elif element_type == ElementType.NSIDED:
                 polygon_node_counts = read_ints(fp, number_of_elements)
-                fp.seek(polygon_node_counts.sum() * SIZE_INT, os.SEEK_CUR)
+                fp.seek(int(polygon_node_counts.sum()) * SIZE_INT, os.SEEK_CUR)
             elif element_type == ElementType.NFACED:
                 polyhedra_face_counts = read_ints(fp, number_of_elements)
-                face_node_counts = read_ints(fp, polyhedra_face_counts.sum())
-                fp.seek(face_node_counts.sum() * SIZE_INT, os.SEEK_CUR)  # skip connectivity
+                face_node_counts = read_ints(fp, int(polyhedra_face_counts.sum()))
+                fp.seek(int(face_node_counts.sum()) * SIZE_INT, os.SEEK_CUR)  # skip connectivity
             else:
                 raise EnsightReaderError(f"Unsupported element type: {element_type}", fp)
 
@@ -792,7 +799,7 @@ class GeometryPart:
     part_id: int
     part_name: str
     number_of_nodes: int
-    element_blocks: List[UnstructuredElementBlock]
+    element_blocks: list[UnstructuredElementBlock]
     node_id_handling: IdHandling
     element_id_handling: IdHandling
     changing_geometry: Optional[ChangingGeometry] = None
@@ -1064,7 +1071,7 @@ class GeometryPart:
                 )
 
 
-def read_array(fp: SeekableBufferedReader, count: int, dtype: Type[TNum]) -> npt.NDArray[TNum]:
+def read_array(fp: SeekableBufferedReader, count: int, dtype: type[TNum]) -> npt.NDArray[TNum]:
     if isinstance(fp, _mmap.mmap):
         offset = fp.tell()
         bytes_to_read = count * dtype().itemsize
@@ -1233,7 +1240,7 @@ class EnsightGeometryFile:
     node_id_handling: IdHandling
     element_id_handling: IdHandling
     extents: Optional[Float32NDArray]
-    parts: Dict[int, GeometryPart]  # part ID -> GeometryPart
+    parts: dict[int, GeometryPart]  # part ID -> GeometryPart
     changing_geometry_per_part: bool
 
     def reload_from_file(self) -> None:
@@ -1256,11 +1263,11 @@ class EnsightGeometryFile:
         self.extents = geofile.extents
         self.parts = geofile.parts
 
-    def get_part_names(self) -> List[str]:
+    def get_part_names(self) -> list[str]:
         """Return list of part names"""
         return [part.part_name for part in self.parts.values()]
 
-    def get_part_ids(self) -> List[int]:
+    def get_part_ids(self) -> list[int]:
         """Return list of part IDs"""
         return [part.part_id for part in self.parts.values()]
 
@@ -1522,11 +1529,11 @@ class EnsightVariableFile:
     variable_name: str
     variable_location: VariableLocation
     variable_type: VariableType
-    part_offsets: Dict[int, int]
-    part_element_offsets: Dict[Tuple[int, ElementType], int]
+    part_offsets: dict[int, int]
+    part_element_offsets: dict[tuple[int, ElementType], int]
     geometry_file: EnsightGeometryFile
-    part_per_node_undefined_values: Dict[int, float]
-    part_per_element_undefined_values: Dict[Tuple[int, ElementType], float]
+    part_per_node_undefined_values: dict[int, float]
+    part_per_element_undefined_values: dict[tuple[int, ElementType], float]
 
     def reload_from_file(self) -> None:
         """
@@ -1556,7 +1563,7 @@ class EnsightVariableFile:
 
     def iter_part_id_element_types(self, part_id: int) -> Iterable[ElementType]:
         """Yield all ElementTypes for given part ID"""
-        return (et for pid, et in self.part_element_offsets.keys() if pid == part_id)
+        return (et for pid, et in self.part_element_offsets if pid == part_id)
 
     def is_defined_for_part_id(self, part_id: int) -> bool:
         """Return True if variable is defined for given part, else False"""
@@ -1660,11 +1667,11 @@ class EnsightVariableFile:
     def from_file_path(cls, file_path: Union[str, os.PathLike[str]], variable_name: str, variable_location: VariableLocation,
                        variable_type: VariableType, geofile: EnsightGeometryFile) -> "EnsightVariableFile":
         """Used internally by `EnsightVariableFileSet.get_file()`"""
-        part_offsets = {}
+        part_offsets: dict[int, int] = {}
 
-        part_element_offsets: Dict[Tuple[int, ElementType], int] = {}
-        part_per_node_undefined_values: Dict[int, float] = {}
-        part_per_element_undefined_values: Dict[Tuple[int, ElementType], float] = {}
+        part_element_offsets: dict[tuple[int, ElementType], int] = {}
+        part_per_node_undefined_values: dict[int, float] = {}
+        part_per_element_undefined_values: dict[tuple[int, ElementType], float] = {}
 
         with open(file_path, "rb") as fp:
             fp.seek(0, os.SEEK_END)
@@ -2127,7 +2134,7 @@ class EnsightGeometryFileSet:
     timeset: Optional[Timeset]
     filename: str
     changing_geometry_per_part: bool = False
-    _file_cache: Dict[int, EnsightGeometryFile] = field(default_factory=dict, repr=False)
+    _file_cache: dict[int, EnsightGeometryFile] = field(default_factory=dict, repr=False)
 
     def get_file(self, timestep: int = 0) -> EnsightGeometryFile:
         """Return geometry for given timestep (use 0 if not transient)"""
@@ -2195,7 +2202,7 @@ class EnsightVariableFileSet:
     variable_name: str
     filename: str
     geometry_model: EnsightGeometryFileSet
-    _file_cache: Dict[int, EnsightVariableFile] = field(default_factory=dict, repr=False)
+    _file_cache: dict[int, EnsightVariableFile] = field(default_factory=dict, repr=False)
 
     def get_file(self, timestep: int = 0, geofile: Optional[EnsightGeometryFile] = None) -> EnsightVariableFile:
         """
@@ -2300,7 +2307,7 @@ class EnsightConstantVariable:
     """
     timeset: Optional[Timeset]
     variable_name: str
-    values: List[float]
+    values: list[float]
 
     def get_value(self, timestep: int = 0) -> float:
         """Return constant value at given timestep (for non-transient constants, use timestep 0)"""
@@ -2310,9 +2317,9 @@ class EnsightConstantVariable:
     def from_casefile_line(
             cls,
             key: str,
-            values: List[str],
+            values: list[str],
             casefile_dir_path: Union[str, os.PathLike[str]]
-    ) -> Tuple["EnsightConstantVariable", Optional[int]]:
+    ) -> tuple["EnsightConstantVariable", Optional[int]]:
         if "file" in key:
             # constant per case file
             if len(values) == 2:
@@ -2361,8 +2368,8 @@ class EnsightConstantVariable:
                 ), ts
 
 
-def read_numbers_from_text_file(path: Union[str, os.PathLike[str]], type_: Type[T]) -> List[T]:
-    output: List[T] = []
+def read_numbers_from_text_file(path: Union[str, os.PathLike[str]], type_: type[T]) -> list[T]:
+    output: list[T] = []
     with open(path) as fp:
         for line in fp:
             values = line.split()
@@ -2421,9 +2428,9 @@ class EnsightCaseFile:
 
     casefile_path: str
     geometry_model: EnsightGeometryFileSet
-    variables: Dict[str, EnsightVariableFileSet]  # variable name -> EnsightVariableFileSet
-    constant_variables: Dict[str, EnsightConstantVariable]  # variable name -> EnsightConstantVariable
-    timesets: Dict[int, Timeset]  # time set ID -> TimeSet
+    variables: dict[str, EnsightVariableFileSet]  # variable name -> EnsightVariableFileSet
+    constant_variables: dict[str, EnsightConstantVariable]  # variable name -> EnsightConstantVariable
+    timesets: dict[int, Timeset]  # time set ID -> TimeSet
 
     def get_geometry_model(self, timestep: int = 0) -> EnsightGeometryFile:
         """
@@ -2470,21 +2477,21 @@ class EnsightCaseFile:
         """Return True if the case is transient (has at least one time set defined)"""
         return len(self.timesets) > 0
 
-    def get_node_variables(self) -> List[str]:
+    def get_node_variables(self) -> list[str]:
         """Return names of variables defined per-node"""
         return [name for name, variable in self.variables.items()
                 if variable.variable_location == VariableLocation.PER_NODE]
 
-    def get_element_variables(self) -> List[str]:
+    def get_element_variables(self) -> list[str]:
         """Return names of variables defined per-element"""
         return [name for name, variable in self.variables.items()
                 if variable.variable_location == VariableLocation.PER_ELEMENT]
 
-    def get_constant_variables(self) -> List[str]:
+    def get_constant_variables(self) -> list[str]:
         """Return names of constant variables defined per-case"""
         return list(self.constant_variables.keys())
 
-    def get_time_values(self, timeset_id: Optional[int] = None) -> Optional[List[float]]:
+    def get_time_values(self, timeset_id: Optional[int] = None) -> Optional[list[float]]:
         """
         Return time values for given time set
 
@@ -2515,7 +2522,7 @@ class EnsightCaseFile:
 
         return self.timesets[timeset_id].time_values
 
-    def get_variables(self) -> List[str]:
+    def get_variables(self) -> list[str]:
         """
         Return list of variable names
 
@@ -2542,10 +2549,10 @@ class EnsightCaseFile:
         geometry_model = None
         dummy_geometry_model = EnsightGeometryFileSet("dummy", None, "dummy")
         geometry_model_ts: Optional[int] = None
-        variables: Dict[str, EnsightVariableFileSet] = {}
-        constant_variables: Dict[str, EnsightConstantVariable] = {}
-        variables_ts: Dict[str, Optional[int]] = {}
-        timesets: Dict[int, Timeset] = {}
+        variables: dict[str, EnsightVariableFileSet] = {}
+        constant_variables: dict[str, EnsightConstantVariable] = {}
+        variables_ts: dict[str, Optional[int]] = {}
+        timesets: dict[int, Timeset] = {}
 
         with open(casefile_path) as fp:
             current_section = None
@@ -2566,7 +2573,7 @@ class EnsightCaseFile:
 
                 if ":" in line:
                     key, values_ = line.split(":", maxsplit=1)
-                    values: List[str] = values_.split()
+                    values: list[str] = values_.split()
                     last_key = key
                 else:
                     key = None
@@ -2891,7 +2898,7 @@ class EnsightCaseFile:
     def append_part_geometry(
             self,
             source_case: "EnsightCaseFile",
-            parts: List[GeometryPart],
+            parts: list[GeometryPart],
             timestep: int = 0
     ) -> None:
         """
@@ -2945,10 +2952,10 @@ class EnsightCaseFile:
     def copy_part_variables(
             self,
             source_case: "EnsightCaseFile",
-            parts: List[GeometryPart],
-            variables: List[str],
+            parts: list[GeometryPart],
+            variables: list[str],
             timestep: int = 0,
-            output_filenames: Optional[List[str]] = None,
+            output_filenames: Optional[list[str]] = None,
     ) -> None:
         """
         Copy given variables for given parts from different case

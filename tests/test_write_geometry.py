@@ -1,15 +1,23 @@
+# pyrefly: ignore-errors[implicit-any-parameter]
 import itertools
+import os.path as op
+import shutil
+import tempfile
 
+import numpy as np
 import pytest
 
 import ensightreader
-from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType, read_case, \
-    VariableLocation, VariableType, EnsightCaseFile
-import numpy as np
-import tempfile
-import os.path as op
-import shutil
-
+from ensightreader import (
+    ElementType,
+    EnsightCaseFile,
+    EnsightGeometryFile,
+    GeometryPart,
+    UnstructuredElementBlock,
+    VariableLocation,
+    VariableType,
+    read_case,
+)
 
 ENSIGHT_CASE_PATH = "./data/cell_types/cell_types.case"
 REFERENCE_GEOFILE_PATH = "./data/cell_types/cell_types.geo"
@@ -271,6 +279,7 @@ def test_create_geometry_with_every_non_ghost_cell_type():
         pids = geofile.get_part_ids()
         assert len(pids) == 1
         part = geofile.get_part_by_id(pids[0])
+        assert part is not None
         assert len(part.element_blocks) == len(element_types_to_nodes)
         assert part.is_surface()
         assert part.is_volume()
@@ -281,9 +290,9 @@ def test_create_geometry_with_every_non_ghost_cell_type():
                 if block.element_type.has_constant_number_of_nodes_per_element():
                     connectivity = block.read_connectivity(fp)
                     assert connectivity.shape == (1, block.element_type.nodes_per_element)
-                    assert connectivity.tolist() == list(sorted(connectivity.tolist()))
+                    assert connectivity.tolist() == sorted(connectivity.tolist())
                     if len(connectivity) > 1:
-                        assert set(list(np.diff(connectivity[0]))) == {1}
+                        assert set(np.diff(connectivity[0])) == {1}
                 elif block.element_type == ElementType.NSIDED:
                     polygon_node_counts_, polygon_connectivity_ = block.read_connectivity_nsided(fp)
                     assert (polygon_node_counts_ == polygon_node_counts).all()
@@ -326,6 +335,8 @@ def test_append_geometry(tmp_path):
         for part_name in cavity_geo.get_part_names():
             sphere_part = sphere_geo.get_part_by_name(part_name)
             cavity_part = cavity_geo.get_part_by_name(part_name)
+            assert sphere_part is not None
+            assert cavity_part is not None
 
             assert np.array_equal(sphere_part.read_nodes(sphere_mm), cavity_part.read_nodes(cavity_mm))
             assert sphere_part.number_of_elements == cavity_part.number_of_elements

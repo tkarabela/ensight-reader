@@ -1,6 +1,12 @@
+# pyrefly: ignore-errors[implicit-any-parameter]
 import numpy as np
 
-from ensightreader import EnsightGeometryFile, GeometryPart, UnstructuredElementBlock, ElementType
+from ensightreader import (
+    ElementType,
+    EnsightGeometryFile,
+    GeometryPart,
+    UnstructuredElementBlock,
+)
 
 
 def test_read_geometry(tmp_path):
@@ -26,8 +32,10 @@ def test_read_geometry(tmp_path):
     geofile = EnsightGeometryFile.from_file_path(output_geofile_path, False)
     with geofile.mmap() as mm:
         part = geofile.get_part_by_id(1)
+        assert part is not None
 
         tria_block = part.get_element_block(ElementType.TRIA3)
+        assert tria_block is not None
 
         tmp = tria_block.read_connectivity(mm)
         assert np.array_equal(tmp, triangles_connectivity)
@@ -42,6 +50,7 @@ def test_read_geometry(tmp_path):
         assert np.array_equal(tmp, np.asarray([[2, 3, 4], [0, 1, 2]], dtype=np.int32))
 
         poly_block = part.get_element_block(ElementType.NSIDED)
+        assert poly_block is not None
 
         tmp_counts, tmp_conn = poly_block.read_connectivity_nsided(mm)
         assert np.array_equal(tmp_counts, polygon_node_counts)

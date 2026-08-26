@@ -1,7 +1,7 @@
+# pyrefly: ignore-errors[implicit-any-parameter]
 from pathlib import Path
 
 import obj2ensight
-
 
 OBJ_CASE_PATH = Path("./data/geometry_shapes/obj/geometry_shapes.obj")
 REFERENCE_ENSIGHT_DIR = Path("./data/geometry_shapes/case")

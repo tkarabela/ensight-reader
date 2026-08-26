@@ -53,11 +53,11 @@ def main() -> int:
                                                               "regular expression (Python re.search)")
 
     action = parser.add_mutually_exclusive_group()
-    action.add_argument("--translate", nargs=3, type=float, metavar=tuple("dX dY dZ".split()),
+    action.add_argument("--translate", nargs=3, type=float, metavar=("dX", "dY", "dZ"),
                         help="translate nodes by given dX, dY, dZ values")
-    action.add_argument("--scale", nargs=3, type=float, metavar=tuple("sX sY sZ".split()),
+    action.add_argument("--scale", nargs=3, type=float, metavar=("sX", "sY", "sZ"),
                         help="scale nodes by given sX, sY, sZ values")
-    action.add_argument("--matrix", nargs=16, type=float, metavar=tuple("a11 a12 a13 a14 a21 a22 a23 a24 a31 a32 a33 a34 a41 a42 a43 a44".split()),
+    action.add_argument("--matrix", nargs=16, type=float, metavar=("a11", "a12", "a13", "a14", "a21", "a22", "a23", "a24", "a31", "a32", "a33", "a34", "a41", "a42", "a43", "a44"),
                         help="do affine transformation of nodes by multiplying via the (a_ij) matrix")
 
     args = parser.parse_args()
@@ -94,7 +94,7 @@ def ensight_transform(ensight_case_path: str,
 
     print("I see", len(geofile.get_part_names()), "parts in case")
     parts = []
-    for part_id, part in geofile.parts.items():
+    for part in geofile.parts.values():
         if part_name_regex and not re.search(part_name_regex, part.part_name):
             print("Skipping part", part.part_name, "(name doesn't match)")
         else:

@@ -48,7 +48,7 @@ def ensight2obj(ensight_case_path: str, output_obj_path: str, part_name_regex: O
 
     print("I see", len(geofile.get_part_names()), "parts in case")
     parts = []
-    for part_id, part in geofile.parts.items():
+    for part in geofile.parts.values():
         if not part.is_surface():
             print("Skipping part", part.part_name, "(not a surface part)")
         elif part_name_regex and not re.search(part_name_regex, part.part_name):

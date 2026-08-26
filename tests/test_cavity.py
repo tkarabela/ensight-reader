@@ -1,11 +1,19 @@
+# pyrefly: ignore-errors[implicit-any-parameter]
 import os.path as op
 import tempfile
+
 import pytest
 
 from ensight2obj import ensight2obj
 from ensight2vtk import ensight2vtk
-from ensightreader import (ElementType, EnsightGeometryFile, IdHandling, VariableLocation,
-                           VariableType, read_case)
+from ensightreader import (
+    ElementType,
+    EnsightGeometryFile,
+    IdHandling,
+    VariableLocation,
+    VariableType,
+    read_case,
+)
 
 REPO_ROOT = op.dirname(op.dirname(__file__))
 ENSIGHT_CASE_PATH = op.join(REPO_ROOT, "./data/cavity/cavity.case")
@@ -50,6 +58,9 @@ def test_read_cavity_case(case_path, recwarn):
     part_internalMesh = geofile.get_part_by_name("internalMesh")
     part_movingWall = geofile.get_part_by_name("movingWall")
     part_fixedWalls = geofile.get_part_by_name("fixedWalls")
+    assert part_internalMesh is not None
+    assert part_movingWall is not None
+    assert part_fixedWalls is not None
     parts = [part_internalMesh, part_movingWall, part_fixedWalls]
 
     assert part_internalMesh.part_id == 1
@@ -97,6 +108,7 @@ def test_read_cavity_case(case_path, recwarn):
                 for part in parts:
                     for block in part.element_blocks:
                         variable_data = variable.read_element_data(fp_var, part.part_id, block.element_type)
+                        assert variable_data is not None
                         assert variable_data.shape[0] == block.number_of_elements
 
 
